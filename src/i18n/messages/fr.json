@@ -1,0 +1,86 @@
+{
+  "metadata": {
+    "title": "Car Rental — Votre flotte. Votre équipe. Un seul espace.",
+    "description": "Un espace de travail pour les agences de location de voitures indépendantes."
+  },
+  "common": {
+    "homeLabel": "Accueil Car Rental",
+    "navigationLabel": "Navigation principale",
+    "skipLink": "Aller au contenu",
+    "platform": "Plateforme",
+    "approach": "Approche",
+    "explore": "Découvrir la plateforme",
+    "ourApproach": "Notre approche",
+    "footer": "Un peu plus de clarté. Chaque jour.",
+    "loading": "Chargement de l’espace de travail…",
+    "language": {
+      "label": "Changer de langue",
+      "pending": "Changement de langue…",
+      "error": "Impossible de changer de langue. Veuillez réessayer."
+    },
+    "theme": {
+      "label": "Changer de thème",
+      "menu": "Thème d’affichage",
+      "light": "Clair",
+      "dark": "Sombre",
+      "system": "Système"
+    },
+    "recovery": {
+      "retry": "Réessayer",
+      "home": "Retour à l’accueil",
+      "reference": "Référence de l’erreur",
+      "notFoundTitle": "Cette route s’arrête ici.",
+      "notFoundDescription": "Cette page est introuvable. Revenez à l’accueil pour continuer.",
+      "errorTitle": "Impossible d’ouvrir cette page.",
+      "errorDescription": "Une erreur est survenue lors du chargement. Veuillez réessayer.",
+      "globalTitle": "Impossible de charger l’espace de travail.",
+      "globalDescription": "Veuillez réessayer dans un instant."
+    }
+  },
+  "home": {
+    "hero": {
+      "fleet": "Votre flotte.",
+      "team": "Votre équipe.",
+      "together": "Un seul espace.",
+      "description": "Un espace de travail simplifié pour les agences de location indépendantes.",
+      "supporting": "Moins de suivi. Plus de temps pour avancer."
+    },
+    "journey": {
+      "label": "Le parcours de location",
+      "title": "Un parcours continu.",
+      "description": "De la remise des clés à leur retour.",
+      "reserve": "Réserver",
+      "handover": "Remettre",
+      "return": "Restituer"
+    },
+    "platform": {
+      "label": "La plateforme",
+      "title": "Chaque détail compte.",
+      "subtitle": "Une vision plus claire.",
+      "description": "Votre activité ne s’arrête jamais.",
+      "supporting": "Nous créons un moyen plus simple de tout réunir.",
+      "fleet": {
+        "title": "Un espace pour votre flotte.",
+        "description": "De la première remise de clés au prochain entretien, retrouvez les détails de chaque véhicule au même endroit.",
+        "details": "Véhicules · Disponibilité · Entretien"
+      },
+      "rentals": {
+        "title": "Chaque location à sa place.",
+        "description": "Réunissez réservations, remises et retours dans une vue d’ensemble de votre journée.",
+        "details": "Réservations · Remises · Retours"
+      },
+      "team": {
+        "title": "Une équipe bien informée.",
+        "description": "Offrez à votre équipe un espace partagé, avec les informations clients dont elle a besoin à portée de main.",
+        "details": "Équipe · Clients · Autorisations"
+      }
+    },
+    "approach": {
+      "title": "Pensé pour votre métier.",
+      "subtitle": "Et pour celles et ceux qui l’exercent.",
+      "description": "Gérer une agence de location, c’est avant tout travailler avec des personnes. Vos outils doivent simplifier le quotidien pour vous permettre de vous concentrer sur le prochain client, la prochaine remise de clés et la suite de votre activité.",
+      "previewTitle": "Un espace de travail en préparation.",
+      "previewDescription": "Vous consultez un aperçu du produit. L’accès aux comptes et la configuration de votre agence seront bientôt disponibles."
+    }
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+.next/
+.cache/
+.tmp/
+convex/_generated/
+pnpm-lock.yaml
+next-env.d.ts
+.env*
