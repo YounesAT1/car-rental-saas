@@ -13,12 +13,19 @@ import { Button } from "@/components/ui/button";
 
 // Pinned remote SVGs from Simple Icons; no logo asset installation is required.
 const brands = [
+  { name: "Mercedes-Benz", slug: "amg" },
   { name: "Renault", slug: "renault" },
   { name: "Volkswagen", slug: "volkswagen" },
   { name: "Toyota", slug: "toyota" },
   { name: "BMW", slug: "bmw" },
   { name: "Audi", slug: "audi" },
   { name: "Peugeot", slug: "peugeot" },
+  { name: "Ford", slug: "ford" },
+  { name: "Honda", slug: "honda" },
+  { name: "Nissan", slug: "nissan" },
+  { name: "Hyundai", slug: "hyundai" },
+  { name: "Kia", slug: "kia" },
+  { name: "Mazda", slug: "mazda" },
 ] as const;
 
 function BrandLogo({ brand }: { brand: (typeof brands)[number] }) {

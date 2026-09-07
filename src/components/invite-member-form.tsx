@@ -20,7 +20,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const roles = [
   "AGENCY_ADMIN",
@@ -111,15 +117,22 @@ export function InviteMemberForm({ agencyId }: { agencyId: Id<"agencies"> }) {
             render={({ field }) => (
               <FormItem>
                 <FormLabel>{messages.workspace.inviteRole}</FormLabel>
-                <FormControl>
-                  <Select {...field}>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger className="w-full">
+                      <SelectValue
+                        placeholder={messages.workspace.inviteRole}
+                      />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
                     {roles.map((role) => (
-                      <option key={role} value={role}>
+                      <SelectItem key={role} value={role}>
                         {role.replaceAll("_", " ")}
-                      </option>
+                      </SelectItem>
                     ))}
-                  </Select>
-                </FormControl>
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}

@@ -10,7 +10,13 @@ import { useI18n } from "@/i18n/client";
 import { InviteMemberForm } from "@/components/invite-member-form";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function WorkspaceDashboard({ agencyId }: { agencyId: string }) {
   const { messages } = useI18n();
@@ -47,13 +53,18 @@ export function WorkspaceDashboard({ agencyId }: { agencyId: string }) {
             <span className="sr-only">{messages.workspace.selectTitle}</span>
             <Select
               value={workspace.agency.id}
-              onChange={(event) => void switchAgency(event.target.value)}
+              onValueChange={(value) => void switchAgency(value)}
             >
-              {agencies.map(({ agency }) => (
-                <option value={agency.id} key={agency.id}>
-                  {agency.name}
-                </option>
-              ))}
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {agencies.map(({ agency }) => (
+                  <SelectItem value={agency.id} key={agency.id}>
+                    {agency.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
             </Select>
           </Label>
         )}

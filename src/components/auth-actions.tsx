@@ -1,6 +1,6 @@
 "use client";
 
-import { Show, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
+import { Show, SignInButton, UserButton } from "@clerk/nextjs";
 import { useI18n } from "@/i18n/client";
 import { Button } from "@/components/ui/button";
 
@@ -22,7 +22,7 @@ export function AuthActions() {
             {messages.auth.signIn}
           </Button>
         </SignInButton>
-        <SignUpButton
+        {/* <SignUpButton
           mode="modal"
           forceRedirectUrl="/onboarding"
           fallbackRedirectUrl="/onboarding"
@@ -33,7 +33,7 @@ export function AuthActions() {
           >
             {messages.auth.signUp}
           </Button>
-        </SignUpButton>
+        </SignUpButton> */}
       </Show>
       <Show when="signed-in">
         <UserButton
