@@ -14,6 +14,15 @@ if (
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "cdn.jsdelivr.net",
+        pathname: "/npm/simple-icons@16.30.0/icons/**",
+      },
+    ],
+  },
   async headers() {
     return [
       {

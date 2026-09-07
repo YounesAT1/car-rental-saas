@@ -14,6 +14,8 @@ import {
   MotionPlatformCard,
   MotionSection,
 } from "@/components/home-motion";
+import { HomeRouteGate } from "@/components/home-route-gate";
+import { HeroBrandStack } from "@/components/hero-brand-stack";
 import { getI18n } from "@/i18n/server";
 
 const platformAreas = [
@@ -37,8 +39,13 @@ export default async function HomePage() {
   } = await getI18n();
   return (
     <>
+      <HomeRouteGate />
       <MotionHero>
         <div className="hero-copy">
+          <HeroBrandStack
+            pauseLabel={home.hero.pauseLogos}
+            playLabel={home.hero.playLogos}
+          />
           <h1 id="hero-title" className="hero-title">
             <span className="hero-title-phrase">{home.hero.fleet}</span>{" "}
             <span className="hero-title-phrase">{home.hero.team}</span>

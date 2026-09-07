@@ -1,5 +1,6 @@
 "use client";
 
+import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +8,7 @@ const BOTTOM_THRESHOLD = 96;
 
 export function SiteHeaderShell({ children }: { children: ReactNode }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const shouldReduceMotion = useReducedMotion();
 
   useEffect(() => {
     const updateHeaderState = () => {
@@ -35,7 +37,17 @@ export function SiteHeaderShell({ children }: { children: ReactNode }) {
       className={cn("site-header", isExpanded && "site-header-expanded")}
       data-expanded={isExpanded}
     >
-      {children}
+      <motion.div
+        layout={!shouldReduceMotion}
+        transition={
+          shouldReduceMotion
+            ? { duration: 0 }
+            : { layout: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } }
+        }
+        className="header-inner"
+      >
+        {children}
+      </motion.div>
     </header>
   );
 }

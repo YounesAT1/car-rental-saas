@@ -10,6 +10,7 @@ export default async function Loading() {
         aria-hidden="true"
         className="hero-copy flex flex-col items-center gap-7"
       >
+        <Skeleton className="size-20 rounded-3xl sm:size-24" />
         <Skeleton className="h-20 w-full max-w-3xl sm:h-44" />
         <Skeleton className="h-16 w-full max-w-lg" />
         <div className="flex flex-wrap justify-center gap-3">

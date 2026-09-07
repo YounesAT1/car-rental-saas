@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "title": "Car Rental — Your fleet. Your team. One place.",
-    "description": "A workspace for independent car rental agencies."
+    "title": "Car Rental — Your fleet Your team One place",
+    "description": "A workspace for independent car rental agencies"
   },
   "common": {
     "homeLabel": "Car Rental home",
@@ -11,12 +11,53 @@
     "approach": "Approach",
     "explore": "Explore the platform",
     "ourApproach": "Our approach",
-    "footer": "A little more clarity. Every day.",
+    "footer": "A little more clarity Every day",
     "loading": "Loading workspace…",
+    "auth": {
+      "signIn": "Sign in",
+      "signUp": "Create account",
+      "signOut": "Sign out",
+      "account": "Account",
+      "continue": "Continue to workspace"
+    },
+    "workspace": {
+      "selectTitle": "Choose your workspace",
+      "selectDescription": "Select an agency to continue, or create your first workspace",
+      "createTitle": "Create your agency",
+      "createDescription": "Start with the workspace your rental team will use every day",
+      "agencyName": "Agency name",
+      "agencySlug": "Workspace URL",
+      "create": "Create agency",
+      "creating": "Creating agency…",
+      "open": "Open workspace",
+      "owner": "Owner",
+      "role": "Role",
+      "empty": "No agency memberships yet",
+      "workspaceLoading": "Loading your workspace…",
+      "workspaceTitle": "Your workspace is ready",
+      "workspaceDescription": "Identity, membership and access checks are active Operational modules arrive in the next phases",
+      "signedInAs": "Signed in as",
+      "backToAgencies": "Switch agency",
+      "syncing": "Preparing your account…",
+      "inviteTitle": "Invite a teammate",
+      "inviteDescription": "Add a team member with the least access they need",
+      "inviteEmail": "Work email",
+      "inviteRole": "Role",
+      "inviteSend": "Create invitation",
+      "inviteSending": "Creating invitation…",
+      "inviteCreated": "Invitation created Share this link with the teammate",
+      "inviteLink": "Invitation link",
+      "validation": {
+        "name": "Use at least 2 characters",
+        "slug": "Use 3–80 lowercase letters, numbers, or hyphens",
+        "email": "Enter a valid email address",
+        "role": "Choose a role"
+      }
+    },
     "language": {
       "label": "Change language",
       "pending": "Changing language…",
-      "error": "The language could not be changed. Please try again."
+      "error": "The language could not be changed Please try again"
     },
     "theme": {
       "label": "Change color theme",
@@ -29,58 +70,60 @@
       "retry": "Try again",
       "home": "Back to home",
       "reference": "Error reference",
-      "notFoundTitle": "This road ends here.",
-      "notFoundDescription": "We couldn’t find that page. Head back to the workspace to start again.",
-      "errorTitle": "We couldn’t open this page.",
-      "errorDescription": "Something went wrong while loading. Please try again.",
-      "globalTitle": "The workspace couldn’t load.",
-      "globalDescription": "Please try again in a moment."
+      "notFoundTitle": "This road ends here",
+      "notFoundDescription": "We couldn’t find that page Head back to the workspace to start again",
+      "errorTitle": "We couldn’t open this page",
+      "errorDescription": "Something went wrong while loading Please try again",
+      "globalTitle": "The workspace couldn’t load",
+      "globalDescription": "Please try again in a moment"
     }
   },
   "home": {
     "hero": {
-      "fleet": "Your fleet.",
-      "team": "Your team.",
-      "together": "One place.",
-      "description": "A simpler workspace for independent rental agencies.",
-      "supporting": "Less keeping track. More moving forward."
+      "fleet": "Your fleet",
+      "team": "Your team",
+      "together": "One place",
+      "description": "A simpler workspace for independent rental agencies",
+      "supporting": "Less keeping track More moving forward",
+      "pauseLogos": "Pause logo animation",
+      "playLogos": "Resume logo animation"
     },
     "journey": {
       "label": "The rental journey",
-      "title": "One connected journey.",
-      "description": "From keys out to keys back.",
+      "title": "One connected journey",
+      "description": "From keys out to keys back",
       "reserve": "Reserve",
       "handover": "Hand over",
       "return": "Return"
     },
     "platform": {
       "label": "The platform",
-      "title": "Every moving part.",
-      "subtitle": "A clearer picture.",
-      "description": "Your business has a lot in motion.",
-      "supporting": "We’re building a simpler way to bring it together.",
+      "title": "Every moving part",
+      "subtitle": "A clearer picture",
+      "description": "Your business has a lot in motion",
+      "supporting": "We’re building a simpler way to bring it together",
       "fleet": {
-        "title": "A home for your fleet.",
-        "description": "From the first set of keys to the next service, keep each vehicle’s details in one place.",
+        "title": "A home for your fleet",
+        "description": "From the first set of keys to the next service, keep each vehicle’s details in one place",
         "details": "Vehicles · Availability · Maintenance"
       },
       "rentals": {
-        "title": "Room for every rental.",
-        "description": "Bring reservations, handovers and returns into one connected view of the day ahead.",
+        "title": "Room for every rental",
+        "description": "Bring reservations, handovers and returns into one connected view of the day ahead",
         "details": "Reservations · Handovers · Returns"
       },
       "team": {
-        "title": "Everyone on the same page.",
-        "description": "Give your team a shared workspace, with the customer details they need close at hand.",
+        "title": "Everyone on the same page",
+        "description": "Give your team a shared workspace, with the customer details they need close at hand",
         "details": "Team · Customers · Permissions"
       }
     },
     "approach": {
-      "title": "Built for the work.",
-      "subtitle": "And the people doing it.",
-      "description": "Running a rental agency is a people business. Your tools should make the everyday details easier to handle, so you can focus on the next customer, the next handover, and what comes next.",
-      "previewTitle": "A workspace in the making.",
-      "previewDescription": "This is a product preview. Account access and agency setup are coming next."
+      "title": "Built for the work",
+      "subtitle": "And the people doing it",
+      "description": "Running a rental agency is a people business Your tools should make the everyday details easier to handle, so you can focus on the next customer, the next handover, and what comes next",
+      "previewTitle": "A workspace in the making",
+      "previewDescription": "This is a product preview Account access and agency setup are coming next"
     }
   }
 }

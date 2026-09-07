@@ -5,6 +5,7 @@ import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
 import { ThemeProvider } from "next-themes";
 import { useState, type ReactNode } from "react";
+import { IdentitySync } from "@/components/identity-sync";
 
 export function Providers({
   children,
@@ -23,6 +24,7 @@ export function Providers({
       disableTransitionOnChange
     >
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
+        <IdentitySync />
         {children}
       </ConvexProviderWithClerk>
     </ThemeProvider>

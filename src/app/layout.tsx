@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
+import { shadcn } from "@clerk/ui/themes";
 import { Providers } from "@/components/providers";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -31,6 +32,7 @@ export default async function RootLayout({
         <ClerkProvider
           publishableKey={clerkPublishableKey}
           localization={localization}
+          appearance={{ theme: shadcn }}
         >
           <I18nProvider locale={locale} messages={messages.common}>
             <Providers convexUrl={convexUrl}>
@@ -48,7 +50,9 @@ export default async function RootLayout({
                 </main>
                 <SiteFooter />
               </div>
-              <ThemeToggle />
+              <div className="floating-controls">
+                <ThemeToggle />
+              </div>
             </Providers>
           </I18nProvider>
         </ClerkProvider>

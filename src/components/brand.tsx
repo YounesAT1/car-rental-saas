@@ -1,21 +1,12 @@
 import { CarTaxiFront } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function Brand({
-  compact = false,
-  monochrome = false,
-}: {
-  compact?: boolean;
-  monochrome?: boolean;
-}) {
+export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <span className="inline-flex items-center gap-2.5">
       <span
         className={cn(
-          "flex shrink-0 items-center justify-center rounded-xl",
-          monochrome
-            ? "bg-foreground text-background"
-            : "bg-primary text-primary-foreground",
+          "flex shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground",
           compact ? "size-8" : "size-10",
         )}
       >
@@ -34,7 +25,6 @@ export function Brand({
         )}
       >
         Car Rental
-        <span className={monochrome ? undefined : "text-primary"}>.</span>
       </span>
     </span>
   );

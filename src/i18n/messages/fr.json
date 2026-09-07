@@ -13,6 +13,47 @@
     "ourApproach": "Notre approche",
     "footer": "Un peu plus de clarté. Chaque jour.",
     "loading": "Chargement de l’espace de travail…",
+    "auth": {
+      "signIn": "Se connecter",
+      "signUp": "Créer un compte",
+      "signOut": "Se déconnecter",
+      "account": "Compte",
+      "continue": "Continuer vers l’espace"
+    },
+    "workspace": {
+      "selectTitle": "Choisissez votre espace",
+      "selectDescription": "Sélectionnez une agence ou créez votre premier espace de travail.",
+      "createTitle": "Créez votre agence",
+      "createDescription": "Commencez avec l’espace que votre équipe de location utilisera chaque jour.",
+      "agencyName": "Nom de l’agence",
+      "agencySlug": "URL de l’espace",
+      "create": "Créer l’agence",
+      "creating": "Création de l’agence…",
+      "open": "Ouvrir l’espace",
+      "owner": "Propriétaire",
+      "role": "Rôle",
+      "empty": "Aucune adhésion d’agence pour le moment.",
+      "workspaceLoading": "Chargement de votre espace…",
+      "workspaceTitle": "Votre espace est prêt.",
+      "workspaceDescription": "L’identité, les adhésions et les contrôles d’accès sont actifs. Les modules opérationnels arrivent dans les prochaines phases.",
+      "signedInAs": "Connecté en tant que",
+      "backToAgencies": "Changer d’agence",
+      "syncing": "Préparation de votre compte…",
+      "inviteTitle": "Inviter un membre",
+      "inviteDescription": "Ajoutez un membre avec les accès strictement nécessaires.",
+      "inviteEmail": "Adresse e-mail professionnelle",
+      "inviteRole": "Rôle",
+      "inviteSend": "Créer l’invitation",
+      "inviteSending": "Création de l’invitation…",
+      "inviteCreated": "Invitation créée. Partagez ce lien avec le membre.",
+      "inviteLink": "Lien d’invitation",
+      "validation": {
+        "name": "Utilisez au moins 2 caractères.",
+        "slug": "Utilisez 3 à 80 lettres minuscules, chiffres ou tirets.",
+        "email": "Saisissez une adresse e-mail valide.",
+        "role": "Choisissez un rôle."
+      }
+    },
     "language": {
       "label": "Changer de langue",
       "pending": "Changement de langue…",
@@ -43,7 +84,9 @@
       "team": "Votre équipe.",
       "together": "Un seul espace.",
       "description": "Un espace de travail simplifié pour les agences de location indépendantes.",
-      "supporting": "Moins de suivi. Plus de temps pour avancer."
+      "supporting": "Moins de suivi. Plus de temps pour avancer.",
+      "pauseLogos": "Mettre les logos en pause",
+      "playLogos": "Reprendre l’animation des logos"
     },
     "journey": {
       "label": "Le parcours de location",
