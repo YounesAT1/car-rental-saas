@@ -184,14 +184,22 @@ export const rolePermissions: Record<RoleKey, readonly PermissionId[]> = {
   READ_ONLY: operationalView,
 };
 
-export function hasPermission(
-  role: RoleKey,
-  permission: string,
-): permission is PermissionId {
-  return rolePermissions[role].includes(permission as PermissionId);
+function isRoleKey(value: string): value is RoleKey {
+  return Object.hasOwn(rolePermissions, value);
 }
 
-export function canGrantRole(actorRole: RoleKey, targetRole: RoleKey) {
+export function hasPermission(
+  role: string,
+  permission: string,
+): permission is PermissionId {
+  return (
+    isRoleKey(role) &&
+    rolePermissions[role].includes(permission as PermissionId)
+  );
+}
+
+export function canGrantRole(actorRole: string, targetRole: string) {
+  if (!isRoleKey(actorRole) || !isRoleKey(targetRole)) return false;
   if (targetRole === "AGENCY_OWNER") return actorRole === "AGENCY_OWNER";
   const actorPermissions = new Set(rolePermissions[actorRole]);
   return rolePermissions[targetRole].every((permission) =>

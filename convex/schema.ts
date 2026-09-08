@@ -58,6 +58,7 @@ export default defineSchema({
   })
     .index("by_agency_user", ["agencyId", "userId"])
     .index("by_user_status", ["userId", "status"])
+    .index("by_agency_role_status", ["agencyId", "roleKey", "status"])
     .index("by_agency_status", ["agencyId", "status"]),
 
   agencyInvitations: defineTable({

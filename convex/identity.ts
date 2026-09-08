@@ -171,6 +171,7 @@ export const ensureCurrentUser = mutation({
   handler: async (ctx, args) => {
     const identity = await requireIdentity(ctx);
     const existing = await findUserByIdentity(ctx, identity);
+    if (existing?.status === "disabled") throw new Error("USER_DISABLED");
     const now = Date.now();
     const fields = {
       ...(identity.name ? { name: identity.name } : {}),
@@ -183,6 +184,12 @@ export const ensureCurrentUser = mutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, fields);
+      const preferences = await ctx.db
+        .query("userPreferences")
+        .withIndex("by_user", (q) => q.eq("userId", existing._id))
+        .unique();
+      if (!preferences)
+        await ctx.db.insert("userPreferences", { userId: existing._id });
       return userDtoValue({ ...existing, ...fields });
     }
 
@@ -232,6 +239,16 @@ export const listAgencies = query({
           membership: membershipDtoValue(membership),
         });
       }
+    }
+    const preferences = await ctx.db
+      .query("userPreferences")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .unique();
+    if (preferences?.lastAgencyId) {
+      const selected = result.findIndex(
+        (entry) => entry.agency.id === preferences.lastAgencyId,
+      );
+      if (selected > 0) result.unshift(...result.splice(selected, 1));
     }
     return result;
   },
@@ -369,6 +386,7 @@ export const createInvitation = mutation({
     const requestKey = args.requestKey.trim();
     if (requestKey.length < 8 || requestKey.length > 120)
       throw new Error("INVALID_REQUEST_KEY");
+    const emailNormalized = normalizeEmail(args.email);
     const existingReceipt = await ctx.db
       .query("commandReceipts")
       .withIndex("by_command", (query) =>
@@ -384,6 +402,13 @@ export const createInvitation = mutation({
         existingReceipt.resultRef as Id<"agencyInvitations">,
       );
       if (invitation) {
+        if (
+          invitation.agencyId !== args.agencyId ||
+          invitation.emailNormalized !== emailNormalized ||
+          invitation.roleKey !== args.roleKey
+        ) {
+          throw new Error("REQUEST_KEY_REUSED");
+        }
         return {
           invitationId: invitation._id,
           token: null,
@@ -393,7 +418,6 @@ export const createInvitation = mutation({
       }
     }
 
-    const emailNormalized = normalizeEmail(args.email);
     const duplicate = await ctx.db
       .query("agencyInvitations")
       .withIndex("by_agency_email_status", (query) =>
@@ -449,15 +473,23 @@ export const acceptInvitation = mutation({
   returns: workspaceDto,
   handler: async (ctx, args) => {
     const current = await requireUser(ctx);
+    if (!/^[a-f0-9]{64}$/.test(args.token.trim()))
+      throw new Error("INVITATION_INVALID");
     const tokenHash = await hashInvitationToken(args.token.trim());
     const invitation = await ctx.db
       .query("agencyInvitations")
       .withIndex("by_token", (query) => query.eq("tokenHash", tokenHash))
       .unique();
-    if (!invitation || invitation.status !== "pending")
-      throw new Error("INVITATION_INVALID");
+    if (!invitation) throw new Error("INVITATION_INVALID");
+    if (
+      invitation.status === "accepted" &&
+      invitation.acceptedUserId === current.user._id
+    ) {
+      // A transport retry may revisit acceptance, but must recheck current access.
+      return workspaceValue(ctx, invitation.agencyId);
+    }
+    if (invitation.status !== "pending") throw new Error("INVITATION_INVALID");
     if (invitation.expiresAt <= Date.now()) {
-      await ctx.db.patch(invitation._id, { status: "expired" });
       throw new Error("INVITATION_EXPIRED");
     }
     const email = current.identity.email
@@ -465,6 +497,8 @@ export const acceptInvitation = mutation({
       : null;
     if (!email || email !== invitation.emailNormalized)
       throw new Error("INVITATION_EMAIL_MISMATCH");
+    if (current.identity.emailVerified !== true)
+      throw new Error("EMAIL_NOT_VERIFIED");
     const agency = await ctx.db.get(invitation.agencyId);
     if (!agency || agency.status !== "active")
       throw new Error("AGENCY_ACCESS_DENIED");

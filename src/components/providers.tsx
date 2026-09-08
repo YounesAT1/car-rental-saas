@@ -24,8 +24,7 @@ export function Providers({
       disableTransitionOnChange
     >
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-        <IdentitySync />
-        {children}
+        <IdentitySync>{children}</IdentitySync>
       </ConvexProviderWithClerk>
     </ThemeProvider>
   );

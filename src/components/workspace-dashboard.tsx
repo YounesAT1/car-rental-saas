@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { WorkspaceLoading } from "@/components/workspace-loading";
 
 export function WorkspaceDashboard({ agencyId }: { agencyId: string }) {
   const { messages } = useI18n();
@@ -33,7 +34,10 @@ export function WorkspaceDashboard({ agencyId }: { agencyId: string }) {
 
   if (workspace === undefined || workspace === null) {
     return (
-      <p className="workspace-loading">{messages.workspace.workspaceLoading}</p>
+      <WorkspaceLoading
+        label={messages.workspace.workspaceLoading}
+        variant="card"
+      />
     );
   }
 
@@ -89,9 +93,14 @@ export function WorkspaceDashboard({ agencyId }: { agencyId: string }) {
       <Card className="workspace-permissions">
         <div>
           <p className="eyebrow">{messages.platform}</p>
-          <h2>{workspace.permissions.length} permissions active</h2>
+          <h2>
+            {messages.workspace.permissionsActive.replace(
+              "{count}",
+              String(workspace.permissions.length),
+            )}
+          </h2>
         </div>
-        <p>Fleet, rentals and team modules will unlock as their phases ship.</p>
+        <p>{messages.workspace.modulesPreview}</p>
       </Card>
       {workspace.permissions.includes("employee.manage") && (
         <InviteMemberForm agencyId={workspace.agency.id} />

@@ -4,8 +4,8 @@ import { useMutation, useQuery } from "convex/react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
-import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { z } from "zod/v4";
 import { api } from "../../convex/_generated/api";
 import { useI18n } from "@/i18n/client";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { WorkspaceLoading } from "@/components/workspace-loading";
 
 function slugFromName(value: string) {
   return value
@@ -37,20 +38,25 @@ export function AgencySelector() {
   const router = useRouter();
   const agencies = useQuery(api.identity.listAgencies);
   const createAgency = useMutation(api.identity.createAgency);
+  const selectAgency = useMutation(api.identity.selectAgency);
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const form = useForm<AgencyFormValues>({
     resolver: zodResolver(
       z.object({
-        name: z.string().trim().min(2, messages.workspace.validation.name),
+        name: z
+          .string()
+          .trim()
+          .min(2, messages.workspace.validation.name)
+          .max(160, messages.workspace.validation.name),
         slug: z
           .string()
           .trim()
           .min(3, messages.workspace.validation.slug)
           .max(80, messages.workspace.validation.slug)
           .regex(/^[a-z0-9-]+$/, messages.workspace.validation.slug),
-      }) as never,
-    ) as unknown as Resolver<AgencyFormValues>,
+      }),
+    ),
     defaultValues: { name: "", slug: "" },
   });
 
@@ -81,7 +87,10 @@ export function AgencySelector() {
 
   if (agencies === undefined) {
     return (
-      <p className="workspace-loading">{messages.workspace.workspaceLoading}</p>
+      <WorkspaceLoading
+        label={messages.workspace.workspaceLoading}
+        variant="card"
+      />
     );
   }
 
@@ -98,7 +107,11 @@ export function AgencySelector() {
               type="button"
               variant="ghost"
               className="agency-card h-auto min-h-20"
-              onClick={() => router.push(`/app/${agency.id}`)}
+              onClick={() =>
+                void selectAgency({ agencyId: agency.id })
+                  .then(() => router.push(`/app/${agency.id}`))
+                  .catch(() => setError(messages.workspace.syncError))
+              }
             >
               <span className="agency-card-mark" aria-hidden="true">
                 {agency.name.slice(0, 1).toUpperCase()}

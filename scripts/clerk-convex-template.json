@@ -1,0 +1,10 @@
+{
+  "name": "convex",
+  "claims": {
+    "aud": "convex",
+    "name": "{{user.full_name}}",
+    "picture": "{{user.image_url}}",
+    "email": "{{user.primary_email_address}}",
+    "email_verified": "{{user.email_verified}}"
+  }
+}

@@ -2,7 +2,7 @@
 
 A multi-tenant operating system for independent rental agencies, with a customer storefront, agency workspace, and separate SaaS administration.
 
-**Current status: Phase 2 identity, tenancy and RBAC implemented locally; live Convex deployment verification is pending the environment usage-limit gate.** See the [Phase 2 report](docs/phase-2.md) for scope, validation and remaining limits.
+**Current status: Phase 2 identity, tenancy and RBAC are implemented and verified against the development stack.** See the [Phase 2 report](docs/phase-2.md) for scope, validation and the remaining browser-console check.
 
 The homepage uses a [Mobbin-inspired navbar and text-only hero](docs/homepage-redesign.md): a floating pill navigation, centered typography, responsive layout, coordinated light/dark themes, and English, French, and Arabic translations with RTL support.
 
@@ -78,4 +78,4 @@ The domain documents describe intended future behavior. The Phase 2 report disti
 
 Each phase begins with inspection, scope, decisions, dependencies, risks, and an implementation plan. Implement that phase only, run its applicable checks, fix defects, update documentation, report results and the next phase, then stop.
 
-The next phase is agency and branch configuration. Continue only after the Phase 2 live Convex deployment check and the remaining acceptance tests are run.
+The next phase is agency and branch configuration. Complete the final browser-console smoke in an environment with Playwright process permissions before continuing to Phase 3.

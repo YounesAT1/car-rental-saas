@@ -1,17 +1,21 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { api } from "../../convex/_generated/api";
+import { useI18n } from "@/i18n/client";
+import { WorkspaceLoading } from "@/components/workspace-loading";
 
 export function HomeRouteGate() {
   const { isLoaded, isSignedIn } = useAuth();
+  const { isAuthenticated } = useConvexAuth();
+  const { messages } = useI18n();
   const router = useRouter();
   const agencies = useQuery(
     api.identity.listAgencies,
-    isSignedIn ? {} : "skip",
+    isAuthenticated ? {} : "skip",
   );
 
   useEffect(() => {
@@ -25,8 +29,10 @@ export function HomeRouteGate() {
   if (!isLoaded || !isSignedIn) return null;
 
   return (
-    <div className="home-route-gate" aria-busy="true">
-      <span className="sr-only">Preparing your workspace…</span>
-    </div>
+    <WorkspaceLoading
+      className="home-route-gate"
+      label={messages.workspace.syncing}
+      variant="page"
+    />
   );
 }

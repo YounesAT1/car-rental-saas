@@ -2,9 +2,10 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "convex/react";
-import { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
-import { z } from "zod";
+import { Check, Copy } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod/v4";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { useI18n } from "@/i18n/client";
@@ -19,6 +20,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -50,20 +56,29 @@ export function InviteMemberForm({ agencyId }: { agencyId: Id<"agencies"> }) {
   const [link, setLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const form = useForm<InviteFormValues>({
     resolver: zodResolver(
       z.object({
         email: z.string().trim().email(messages.workspace.validation.email),
         roleKey: z.enum(roles, { error: messages.workspace.validation.role }),
-      }) as never,
-    ) as unknown as Resolver<InviteFormValues>,
+      }),
+    ),
     defaultValues: { email: "", roleKey: "EMPLOYEE" },
   });
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeout.current) clearTimeout(copyTimeout.current);
+    };
+  }, []);
 
   async function submit(values: InviteFormValues) {
     setIsSending(true);
     setError(null);
     setLink(null);
+    setCopied(false);
     try {
       const result = await createInvitation({
         agencyId,
@@ -82,6 +97,30 @@ export function InviteMemberForm({ agencyId }: { agencyId: Id<"agencies"> }) {
       );
     } finally {
       setIsSending(false);
+    }
+  }
+
+  async function copyInvitationLink() {
+    if (!link) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const input = document.getElementById(
+          "invitation-link",
+        ) as HTMLInputElement | null;
+        if (!input) throw new Error("INVITATION_LINK_NOT_FOUND");
+        input.focus();
+        input.select();
+        if (!document.execCommand("copy")) {
+          throw new Error("INVITATION_COPY_FAILED");
+        }
+      }
+      setCopied(true);
+      if (copyTimeout.current) clearTimeout(copyTimeout.current);
+      copyTimeout.current = setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setError(messages.workspace.copyError);
     }
   }
 
@@ -155,12 +194,35 @@ export function InviteMemberForm({ agencyId }: { agencyId: Id<"agencies"> }) {
             <Label htmlFor="invitation-link">
               {messages.workspace.inviteLink}
             </Label>
-            <Input
-              id="invitation-link"
-              readOnly
-              value={link}
-              onFocus={(event) => event.currentTarget.select()}
-            />
+            <InputGroup className="invite-link-input-group">
+              <InputGroupInput
+                id="invitation-link"
+                readOnly
+                value={link}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+              <InputGroupButton
+                size="icon-sm"
+                className="invite-copy-button"
+                onClick={() => void copyInvitationLink()}
+                aria-label={
+                  copied
+                    ? messages.workspace.invitationLinkCopied
+                    : messages.workspace.copyInvitationLink
+                }
+                title={
+                  copied
+                    ? messages.workspace.invitationLinkCopied
+                    : messages.workspace.copyInvitationLink
+                }
+              >
+                {copied ? (
+                  <Check aria-hidden="true" />
+                ) : (
+                  <Copy aria-hidden="true" />
+                )}
+              </InputGroupButton>
+            </InputGroup>
           </div>
         </div>
       )}

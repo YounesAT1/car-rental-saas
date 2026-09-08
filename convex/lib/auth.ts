@@ -99,9 +99,12 @@ export async function countActiveOwners(
 ) {
   const members = await ctx.db
     .query("agencyMembers")
-    .withIndex("by_agency_status", (query) =>
-      query.eq("agencyId", agencyId).eq("status", "active"),
+    .withIndex("by_agency_role_status", (query) =>
+      query
+        .eq("agencyId", agencyId)
+        .eq("roleKey", "AGENCY_OWNER")
+        .eq("status", "active"),
     )
-    .take(1000);
-  return members.filter((member) => member.roleKey === "AGENCY_OWNER").length;
+    .take(2);
+  return members.length;
 }
