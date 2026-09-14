@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { currencies, timezones } from "../src/lib/agency-settings";
 import type { Id } from "./_generated/dataModel";
 import {
   canGrantRole,
@@ -49,6 +50,7 @@ const agencyDto = v.object({
   slug: v.string(),
   timezone: v.string(),
   currency: v.string(),
+  country: v.string(),
   status: v.union(
     v.literal("active"),
     v.literal("suspended"),
@@ -114,6 +116,7 @@ function agencyDtoValue(agency: {
   slug: string;
   timezone: string;
   currency: string;
+  country?: string;
   status: "active" | "suspended" | "archived";
 }) {
   return {
@@ -122,6 +125,7 @@ function agencyDtoValue(agency: {
     slug: agency.slug,
     timezone: agency.timezone,
     currency: agency.currency,
+    country: agency.country ?? "MA",
     status: agency.status,
   };
 }
@@ -305,13 +309,24 @@ export const createAgency = mutation({
       .unique();
     if (duplicate) throw new Error("AGENCY_SLUG_TAKEN");
 
+    const timezone = args.timezone?.trim() || "Africa/Casablanca";
+    const currency = args.currency?.trim().toUpperCase() || "MAD";
+    if (!timezones.some((value) => value === timezone))
+      throw new Error("INVALID_TIMEZONE");
+    if (!currencies.some((value) => value === currency))
+      throw new Error("INVALID_CURRENCY");
+
     const agencyId = await ctx.db.insert("agencies", {
       name,
       slug,
       status: "active",
-      timezone: args.timezone?.trim() || "Africa/Casablanca",
-      currency: args.currency?.trim().toUpperCase() || "MAD",
-      policyVersion: 1,
+      timezone,
+      currency,
+      policyVersion: 0,
+      country: "MA",
+      defaultLocale: "en",
+      revision: 0,
+      updatedAt: Date.now(),
       createdByUserId: user._id,
     });
     await ctx.db.insert("agencyMembers", {

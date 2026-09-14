@@ -21,3 +21,4 @@ agent
 .claude
 docs
 .pnpm-store/
+.idea/

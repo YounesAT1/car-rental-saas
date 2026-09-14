@@ -21,6 +21,9 @@ test.each([
   "//evil.example",
   "/\\evil.example",
   "javascript:alert(1)",
+  "/app/abc123/settings/../admin",
+  "/app/abc123/settings/branches?next=https://evil.example",
+  "/app/abc123/settings/unknown",
   ["/onboarding", "https://evil.example"],
   undefined,
 ])("rejects unsafe return destination %s", (input) => {
@@ -34,4 +37,23 @@ test("rejects invalid invitation token and drops unrelated return query argument
       `/invitations/accept?token=${"b".repeat(64)}&next=https://evil.example`,
     ),
   ).toBe(`/invitations/accept?token=${"b".repeat(64)}`);
+});
+
+test.each([
+  "",
+  "/settings",
+  "/settings/branches",
+  "/settings/policies",
+  "/fleet",
+  "/fleet/new",
+  "/fleet/catalogs",
+  "/fleet/vehicle123",
+  "/fleet/vehicle123/edit",
+])("preserves the allowed workspace return path %s", (suffix) => {
+  const target = `/app/abc123${suffix}`;
+  const redirect = new URL(
+    signInPath(target),
+    "https://app.invalid",
+  ).searchParams.get("redirect_url");
+  expect(redirect).toBe(target);
 });

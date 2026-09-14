@@ -42,10 +42,7 @@ export default async function HomePage() {
       <HomeRouteGate />
       <MotionHero>
         <div className="hero-copy">
-          <HeroBrandStack
-            pauseLabel={home.hero.pauseLogos}
-            playLabel={home.hero.playLogos}
-          />
+          <HeroBrandStack />
           <h1 id="hero-title" className="hero-title">
             <span className="hero-title-phrase">{home.hero.fleet}</span>{" "}
             <span className="hero-title-phrase">{home.hero.team}</span>

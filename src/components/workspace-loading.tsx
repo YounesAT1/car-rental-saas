@@ -35,7 +35,7 @@ export function WorkspaceLoading({
           <Skeleton className="h-3 w-28" />
         </div>
         <Skeleton className="h-8 w-3/5 max-w-80" />
-        <Skeleton className="h-4 w-4/5 max-w-[28rem]" />
+        <Skeleton className="h-4 w-4/5 max-w-md" />
         <div className="workspace-loading-panels">
           <Skeleton className="h-24 rounded-2xl" />
           <Skeleton className="h-24 rounded-2xl" />

@@ -8,3 +8,4 @@
 - Preserve local credentials and user-added skills/configuration. Never print keys or claim tokens, and never commit them.
 - Use exact pinned dependencies and pnpm. Run type generation/checks and production builds sequentially because they share `.next` output.
 - Keep Server Components as the default. Validate responsive layouts, both themes, keyboard navigation and real link destinations for UI changes.
+- Use the shared shadcn components in `src/components/ui` for app controls whenever an equivalent exists, including inputs, selects, checkboxes, labels, field groups, tables, disclosures and dialogs. Native elements belong inside those primitives or in semantic page structure. Use `useConfirm` for application confirmations; the browser owns the reload/close warning.

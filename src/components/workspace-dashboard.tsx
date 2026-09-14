@@ -9,6 +9,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { useI18n } from "@/i18n/client";
 import { InviteMemberForm } from "@/components/invite-member-form";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Building2, ArrowRight, CarFront, Gauge } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -102,6 +104,71 @@ export function WorkspaceDashboard({ agencyId }: { agencyId: string }) {
         </div>
         <p>{messages.workspace.modulesPreview}</p>
       </Card>
+      <Card className="settings-workspace-entry">
+        <div className="settings-location-mark">
+          <Building2 className="size-5" aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2>{messages.settings.setup}</h2>
+          <p>{messages.settings.setupDescription}</p>
+        </div>
+        <Button
+          asChild
+          variant="outline"
+          className="h-11 shadow-none rounded-full"
+        >
+          <Link
+            href={`/app/${agencyId}/settings${workspace.permissions.includes("agency.settings") ? "" : "/branches"}`}
+          >
+            {messages.settings.open}
+            <ArrowRight className="directional-icon size-4" aria-hidden />
+          </Link>
+        </Button>
+      </Card>
+      {workspace.permissions.includes("vehicle.read") && (
+        <Card className="settings-workspace-entry">
+          <div className="settings-location-mark">
+            <CarFront className="size-5" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2>{messages.fleet.title}</h2>
+            <p>{messages.fleet.description}</p>
+          </div>
+          <Button
+            asChild
+            variant="outline"
+            className="h-11 shadow-none rounded-full"
+          >
+            <Link href={`/app/${agencyId}/fleet`}>
+              {messages.fleet.open}
+              <ArrowRight className="directional-icon size-4" aria-hidden />
+            </Link>
+          </Button>
+        </Card>
+      )}
+      {(workspace.permissions.includes("maintenance.read") ||
+        workspace.permissions.includes("inspection.read") ||
+        workspace.permissions.includes("task.read")) && (
+        <Card className="settings-workspace-entry">
+          <div className="settings-location-mark">
+            <Gauge className="size-5" aria-hidden />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2>{messages.operations.title}</h2>
+            <p>{messages.operations.description}</p>
+          </div>
+          <Button
+            asChild
+            variant="outline"
+            className="h-11 shadow-none rounded-full"
+          >
+            <Link href={`/app/${agencyId}/operations`}>
+              {messages.operations.open}
+              <ArrowRight className="directional-icon size-4" aria-hidden />
+            </Link>
+          </Button>
+        </Card>
+      )}
       {workspace.permissions.includes("employee.manage") && (
         <InviteMemberForm agencyId={workspace.agency.id} />
       )}

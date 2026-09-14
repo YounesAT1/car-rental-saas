@@ -6,10 +6,8 @@ import {
   useInView,
   useReducedMotion,
 } from "framer-motion";
-import { Pause, Play } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 
 // Pinned remote SVGs from Simple Icons; no logo asset installation is required.
 const brands = [
@@ -48,21 +46,14 @@ function BrandLogo({ brand }: { brand: (typeof brands)[number] }) {
   );
 }
 
-export function HeroBrandStack({
-  pauseLabel,
-  playLabel,
-}: {
-  pauseLabel: string;
-  playLabel: string;
-}) {
+export function HeroBrandStack() {
   const [step, setStep] = useState(0);
-  const [paused, setPaused] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { amount: 0.5 });
   const reducedMotion = useReducedMotion();
 
   useEffect(() => {
-    if (!inView || paused || reducedMotion !== false) return;
+    if (!inView || reducedMotion !== false) return;
 
     let timer: ReturnType<typeof setInterval> | undefined;
     const syncTimer = () => {
@@ -78,66 +69,42 @@ export function HeroBrandStack({
       clearInterval(timer);
       document.removeEventListener("visibilitychange", syncTimer);
     };
-  }, [inView, paused, reducedMotion]);
-
-  const tiles = (
-    <span className="hero-brand-tiles" aria-hidden="true">
-      <AnimatePresence initial={false}>
-        {[2, 1, 0].map((depth) => {
-          const sequence = step + depth;
-          const brand = brands[sequence % brands.length] ?? brands[0];
-          return (
-            <motion.span
-              key={sequence}
-              className="hero-brand-tile"
-              style={{ zIndex: 3 - depth }}
-              initial={{ y: -30, scale: 0.72, opacity: 0 }}
-              animate={{
-                y: -depth * 12,
-                scale: 1 - depth * 0.1,
-                opacity: 1 - depth * 0.3,
-              }}
-              exit={{ y: 24, scale: 1.16, opacity: 0, zIndex: 4 }}
-              transition={{
-                duration: reducedMotion ? 0 : 0.85,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-            >
-              <BrandLogo brand={brand} />
-            </motion.span>
-          );
-        })}
-      </AnimatePresence>
-    </span>
-  );
+  }, [inView, reducedMotion]);
 
   return (
     <div
       ref={ref}
       className="hero-brand-stack"
-      data-paused={paused || reducedMotion === true}
+      data-paused={reducedMotion === true}
     >
-      {reducedMotion ? (
-        tiles
-      ) : (
-        <Button
-          type="button"
-          variant="ghost"
-          className="hero-brand-button relative size-full rounded-[28px] p-0 hover:bg-transparent"
-          onClick={() => setPaused((value) => !value)}
-          aria-label={paused ? playLabel : pauseLabel}
-          title={paused ? playLabel : pauseLabel}
-        >
-          {tiles}
-          <span className="hero-brand-playback" aria-hidden="true">
-            {paused ? (
-              <Play className="size-3" />
-            ) : (
-              <Pause className="size-3" />
-            )}
-          </span>
-        </Button>
-      )}
+      <span className="hero-brand-tiles" aria-hidden="true">
+        <AnimatePresence initial={false}>
+          {[2, 1, 0].map((depth) => {
+            const sequence = step + depth;
+            const brand = brands[sequence % brands.length] ?? brands[0];
+            return (
+              <motion.span
+                key={sequence}
+                className="hero-brand-tile"
+                style={{ zIndex: 3 - depth }}
+                initial={{ y: -30, scale: 0.72, opacity: 0 }}
+                animate={{
+                  y: -depth * 12,
+                  scale: 1 - depth * 0.1,
+                  opacity: 1 - depth * 0.3,
+                }}
+                exit={{ y: 24, scale: 1.16, opacity: 0, zIndex: 4 }}
+                transition={{
+                  duration: reducedMotion ? 0 : 0.85,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              >
+                <BrandLogo brand={brand} />
+              </motion.span>
+            );
+          })}
+        </AnimatePresence>
+      </span>
     </div>
   );
 }

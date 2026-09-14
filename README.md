@@ -2,11 +2,13 @@
 
 A multi-tenant operating system for independent rental agencies, with a customer storefront, agency workspace, and separate SaaS administration.
 
-**Current status: Phase 2 identity, tenancy and RBAC are implemented and verified against the development stack.** See the [Phase 2 report](docs/phase-2.md) for scope, validation and the remaining browser-console check.
+**Current status: Phase 5 vehicle operations are implemented locally; the configured development Convex push is pending explicit authorization.** Open **Workspace → Operations** for readiness, maintenance, inspections and tasks, or **Workspace → Manage fleet** for vehicles, categories/features and photos. See the [Phase 5 report](docs/phase-5.md) for scope, validation and the remaining live gate; the Phase 4 report covers fleet evidence.
 
 The homepage uses a [Mobbin-inspired navbar and text-only hero](docs/homepage-redesign.md): a floating pill navigation, centered typography, responsive layout, coordinated light/dark themes, and English, French, and Arabic translations with RTL support.
 
-The application uses Next.js App Router, strict TypeScript, Tailwind CSS, selected shadcn primitives, Clerk and Convex. It includes a responsive public shell, light/dark theme, multilingual loading and recovery states, real Clerk auth routes, Convex identity synchronization, agency onboarding, invitations and a protected workspace.
+The application uses Next.js App Router, strict TypeScript, Tailwind CSS, shadcn UI components, Clerk and Convex. It includes a responsive public shell, light/dark theme, multilingual loading and recovery states, real Clerk auth routes, Convex identity synchronization, agency onboarding, invitations and a protected workspace.
+
+Use the shared shadcn components under `src/components/ui` for app controls, including form inputs, selects, checkboxes, field groups, tables, disclosures and dialogs. Application confirmations use `useConfirm`; reload/close warnings remain browser-managed. See the [control migration report](docs/shadcn-controls.md) for coverage and validation.
 
 ## Run locally
 
@@ -34,8 +36,9 @@ For another development environment, select the intended Convex development depl
 | `CLERK_SECRET_KEY`                  | Clerk server key; never a `NEXT_PUBLIC_` value                                                           |
 | `NEXT_PUBLIC_CONVEX_URL`            | Convex client API URL ending in `.convex.cloud`                                                          |
 | `CONVEX_DEPLOYMENT`                 | CLI selection written by Convex, currently `dev:wary-labrador-920`                                       |
-| `NEXT_PUBLIC_CONVEX_SITE_URL`       | CLI-provided HTTP action origin; reserved, not consumed by the current UI                                |
+| `NEXT_PUBLIC_CONVEX_SITE_URL`       | CLI-provided HTTP action origin used for authenticated private evidence upload/download                  |
 | `CLERK_JWT_ISSUER_DOMAIN`           | Clerk Frontend API HTTPS issuer; required separately in Convex, and locally by the provider smoke script |
+| `PRIVATE_FILE_ALLOWED_ORIGINS`      | Exact comma-separated web origins allowed to call authenticated private-file HTTP actions                |
 
 Set the issuer on the selected backend with `pnpm exec convex env set CLERK_JWT_ISSUER_DOMAIN https://YOUR_INSTANCE.clerk.accounts.dev`. This is a public issuer URL, not a secret key. The current unclaimed app uses a supported JWT template named `convex`, with claims `{ "aud": "convex" }`, a 60-second lifetime and 5-second clock skew. Convex's Clerk provider requests that template when the session lacks the `convex` audience. Once the app is claimed, the recommended Clerk Convex integration can configure the session audience directly; rerun the provider smoke check after changing it. See the [integration decision](docs/phase-1.md#provider-configuration).
 
@@ -44,6 +47,8 @@ Set the issuer on the selected backend with `pnpm exec convex env set CLERK_JWT_
 ```sh
 pnpm check
 pnpm format:check
+pnpm i18n:check
+pnpm test
 pnpm build
 pnpm convex:check
 pnpm smoke:providers
@@ -52,6 +57,8 @@ pnpm smoke:providers
 `check` runs frontend/backend type checks and ESLint with zero warnings allowed. `convex:check` generates types, validates and pushes functions to the selected **development** deployment; it is not a read-only command. `smoke:providers` requires development keys, creates one synthetic Clerk user/session, verifies a signed token and tampered-token rejection, then deletes that user in a `finally` block. It never writes business data. Keep this live smoke check out of production automation. If interrupted during the check, locate only users with the private metadata purpose `phase-1-provider-smoke` for cleanup.
 
 For the production build locally, run `pnpm start` after `pnpm build`. Both frontend modes require access to Clerk. Use `localhost:3000` consistently. In restricted execution environments, Next.js worker spawning may require process permission and service CLIs require network access.
+
+With the app running and the development backend updated, `pnpm smoke:phase5` runs the Phase 2–5 browser/domain flow (or use `pnpm smoke:phase4` for Phase 2–4). Set `PHASE2_BASE_URL` if using a port other than 3000. This creates disposable Clerk identities and agencies, verifies tenant isolation, settings, fleet records, photo processing, mileage, private evidence, maintenance/inspection/task permissions, themes and translations, then performs scoped cleanup. Screenshots and a cleanup manifest live under ignored `.tmp/phase2-<run-id>/`. It refuses production credentials and deployment-key overrides. If interrupted, use the exact manifest for cleanup; do not reset your database.
 
 ## Read the proposal
 
@@ -68,14 +75,17 @@ For the production build locally, run `pnpm start` after `pnpm build`. Both fron
 | [Dependencies](docs/dependencies.md)               | Minimal dependency policy, official documentation review, phase-specific additions            |
 | [Testing](docs/testing.md)                         | Acceptance gates, isolation matrix, concurrency verification, UX checks                       |
 | [Deployment](docs/deployment.md)                   | Future environments, secrets ownership, releases, backups, observability                      |
-| [Phase 2 report](docs/phase-2.md)                  | Implemented identity, tenancy, RBAC, onboarding and workspace evidence                         |
+| [Phase 2 report](docs/phase-2.md)                  | Implemented identity, tenancy, RBAC, onboarding and workspace evidence                        |
+| [Phase 3 report](docs/phase-3.md)                  | Agency settings, branches/hours, versioned policies and validation evidence                   |
+| [Phase 4 report](docs/phase-4.md)                  | Fleet, catalogs, validated photo uploads, permissions and validation evidence                 |
+| [Phase 5 report](docs/phase-5.md)                  | Vehicle operations, private evidence, readiness, inspections, damage and task foundations       |
 | [Roadmap](docs/roadmap.md)                         | Phases 0–19, adjusted dependencies, decisions and Phase 0 completion report                   |
 | [Architecture decisions](docs/decisions/README.md) | Important tradeoffs and proposed ADRs                                                         |
 
-The domain documents describe intended future behavior. The Phase 2 report distinguishes the implemented identity and tenant boundary from later business modules, operational workflows and production hardening.
+The domain documents describe intended future behavior. The phase reports distinguish the implemented features from later business modules, operational workflows and production hardening. The local `docs` directory is currently ignored by Git.
 
 ## Working agreement
 
 Each phase begins with inspection, scope, decisions, dependencies, risks, and an implementation plan. Implement that phase only, run its applicable checks, fix defects, update documentation, report results and the next phase, then stop.
 
-The next phase is agency and branch configuration. Complete the final browser-console smoke in an environment with Playwright process permissions before continuing to Phase 3.
+The next phase is **Phase 6 — Customers**. Continue only after the Phase 5 development push and live smoke gate are explicitly authorized and complete.

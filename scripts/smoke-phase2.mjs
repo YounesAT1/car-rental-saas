@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { setTimeout as delay } from "node:timers/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -35,17 +36,37 @@ let pendingSignupEmail;
 const artifactPath = `.tmp/phase2-${runId}`;
 await mkdir(artifactPath, { recursive: true });
 
+async function connectionRetry(operation) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      // Only retry failure to establish a connection. Never replay an uncertain write.
+      if (error.cause?.code !== "UND_ERR_CONNECT_TIMEOUT" || attempt >= 2)
+        throw error;
+      console.log(
+        "RETRY: service connection timed out before request dispatch.",
+      );
+      await delay(1000);
+    }
+  }
+}
+
 async function clerkRequest(path, method = "GET", body) {
-  const response = await fetch(`https://api.clerk.com/v1${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(20_000),
-  });
-  const result = await response.json();
+  const response = await connectionRetry(() =>
+    fetch(`https://api.clerk.com/v1${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(20_000),
+    }),
+  );
+  if (method === "DELETE" && response.status === 404) return { deleted: true };
+  const bodyText = await response.text();
+  const result = bodyText ? JSON.parse(bodyText) : {};
   if (!response.ok)
     throw new Error(
       `Clerk request failed (${response.status}): ${result.errors?.[0]?.code ?? "unknown"}`,
@@ -92,6 +113,7 @@ async function connectUser(userId, email) {
   const client = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL, {
     logger: false,
   });
+  let expiresAt = 0;
   const refresh = async () => {
     const { jwt } = await clerkRequest(
       `/sessions/${session.id}/tokens/convex`,
@@ -110,12 +132,37 @@ async function connectUser(userId, email) {
       "Verified primary email claim is required.",
     );
     client.setAuth(jwt);
+    expiresAt = claims.exp * 1000;
   };
   await refresh();
-  const profile = await client.mutation(api.identity.ensureCurrentUser, {
-    locale: "en",
-  });
-  return { client, profile, email, refresh };
+  // Refresh before dispatch, not by replaying a potentially committed mutation.
+  const authenticatedClient = {
+    async action(...args) {
+      return connectionRetry(async () => {
+        if (Date.now() >= expiresAt - 30_000) await refresh();
+        return client.action(...args);
+      });
+    },
+    async query(...args) {
+      return connectionRetry(async () => {
+        if (Date.now() >= expiresAt - 30_000) await refresh();
+        return client.query(...args);
+      });
+    },
+    async mutation(...args) {
+      return connectionRetry(async () => {
+        if (Date.now() >= expiresAt - 30_000) await refresh();
+        return client.mutation(...args);
+      });
+    },
+  };
+  const profile = await authenticatedClient.mutation(
+    api.identity.ensureCurrentUser,
+    {
+      locale: "en",
+    },
+  );
+  return { client: authenticatedClient, profile, email, refresh };
 }
 
 function invitation(owner, agencyId, email, roleKey = "EMPLOYEE") {
@@ -131,165 +178,174 @@ try {
   console.log(
     "TARGET: development wary-labrador-920; temporary Phase 2 accounts only.",
   );
-  const owner = await addUser("owner");
   const other = await addUser("other");
-  const employee = await addUser("employee");
-  const a = await owner.client.mutation(api.identity.createAgency, {
-    name: "Phase 2 Atlas",
-    slug: `phase2-${runId}-atlas`,
-  });
-  const b = await other.client.mutation(api.identity.createAgency, {
-    name: "Phase 2 Sahara",
-    slug: `phase2-${runId}-sahara`,
-  });
-  const anon = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL, {
-    logger: false,
-  });
-  assert.deepEqual(await anon.query(api.identity.listAgencies, {}), []);
-  await assert.rejects(
-    anon.mutation(api.identity.selectAgency, { agencyId: a.agency.id }),
-    /UNAUTHENTICATED/,
-  );
-  assert.equal(
-    await other.client.query(api.identity.getWorkspace, {
-      agencyId: a.agency.id,
-    }),
-    null,
-  );
-  await assert.rejects(
-    other.client.mutation(api.identity.selectAgency, { agencyId: a.agency.id }),
-    /AGENCY_ACCESS_DENIED/,
-  );
-  assert.equal(
-    (await owner.client.query(api.identity.listAgencies, {}))[0].agency.id,
-    a.agency.id,
-  );
-  assert.equal(
-    (await other.client.query(api.identity.listAgencies, {}))[0].agency.id,
-    b.agency.id,
-  );
-  console.log(
-    "PASS: verified Clerk profiles, owner creation, anonymous denial and two-agency isolation.",
-  );
+  // Use --browser-only for a focused UI rerun after the full domain suite passed.
+  if (!process.argv.includes("--browser-only")) {
+    const owner = await addUser("owner");
+    const employee = await addUser("employee");
+    const a = await owner.client.mutation(api.identity.createAgency, {
+      name: "Phase 2 Atlas",
+      slug: `phase2-${runId}-atlas`,
+    });
+    const b = await other.client.mutation(api.identity.createAgency, {
+      name: "Phase 2 Sahara",
+      slug: `phase2-${runId}-sahara`,
+    });
+    const anon = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL, {
+      logger: false,
+      fetch: (...args) => connectionRetry(() => fetch(...args)),
+    });
+    assert.deepEqual(await anon.query(api.identity.listAgencies, {}), []);
+    await assert.rejects(
+      anon.mutation(api.identity.selectAgency, { agencyId: a.agency.id }),
+      /UNAUTHENTICATED/,
+    );
+    assert.equal(
+      await other.client.query(api.identity.getWorkspace, {
+        agencyId: a.agency.id,
+      }),
+      null,
+    );
+    await assert.rejects(
+      other.client.mutation(api.identity.selectAgency, {
+        agencyId: a.agency.id,
+      }),
+      /AGENCY_ACCESS_DENIED/,
+    );
+    assert.equal(
+      (await owner.client.query(api.identity.listAgencies, {}))[0].agency.id,
+      a.agency.id,
+    );
+    assert.equal(
+      (await other.client.query(api.identity.listAgencies, {}))[0].agency.id,
+      b.agency.id,
+    );
+    console.log(
+      "PASS: verified Clerk profiles, owner creation, anonymous denial and two-agency isolation.",
+    );
 
-  const invite = await invitation(owner, a.agency.id, employee.email);
-  await assert.rejects(
-    other.client.mutation(api.identity.acceptInvitation, {
-      token: invite.token,
-    }),
-    /INVITATION_EMAIL_MISMATCH/,
-  );
-  const joined = await employee.client.mutation(api.identity.acceptInvitation, {
-    token: invite.token,
-  });
-  assert.equal(joined.membership.roleKey, "EMPLOYEE");
-  assert(!joined.permissions.includes("employee.manage"));
-  assert.equal(
-    (
-      await employee.client.mutation(api.identity.acceptInvitation, {
+    const invite = await invitation(owner, a.agency.id, employee.email);
+    await assert.rejects(
+      other.client.mutation(api.identity.acceptInvitation, {
         token: invite.token,
-      })
-    ).membership.id,
-    joined.membership.id,
-  );
-  await assert.rejects(
-    invitation(employee, a.agency.id, other.email),
-    /PERMISSION_DENIED/,
-  );
-  await assert.rejects(
-    employee.client.mutation(api.identity.updateMemberRole, {
+      }),
+      /INVITATION_EMAIL_MISMATCH/,
+    );
+    const joined = await employee.client.mutation(
+      api.identity.acceptInvitation,
+      {
+        token: invite.token,
+      },
+    );
+    assert.equal(joined.membership.roleKey, "EMPLOYEE");
+    assert(!joined.permissions.includes("employee.manage"));
+    assert.equal(
+      (
+        await employee.client.mutation(api.identity.acceptInvitation, {
+          token: invite.token,
+        })
+      ).membership.id,
+      joined.membership.id,
+    );
+    await assert.rejects(
+      invitation(employee, a.agency.id, other.email),
+      /PERMISSION_DENIED/,
+    );
+    await assert.rejects(
+      employee.client.mutation(api.identity.updateMemberRole, {
+        agencyId: a.agency.id,
+        userId: employee.profile.id,
+        roleKey: "AGENCY_OWNER",
+      }),
+      /PERMISSION_DENIED/,
+    );
+    await assert.rejects(
+      owner.client.mutation(api.identity.revokeMembership, {
+        agencyId: a.agency.id,
+        userId: owner.profile.id,
+      }),
+      /LAST_OWNER_PROTECTED/,
+    );
+    await assert.rejects(
+      owner.client.mutation(api.identity.updateMemberRole, {
+        agencyId: a.agency.id,
+        userId: owner.profile.id,
+        roleKey: "EMPLOYEE",
+      }),
+      /LAST_OWNER_PROTECTED/,
+    );
+    await owner.client.mutation(api.identity.updateMemberRole, {
       agencyId: a.agency.id,
       userId: employee.profile.id,
-      roleKey: "AGENCY_OWNER",
-    }),
-    /PERMISSION_DENIED/,
-  );
-  await assert.rejects(
-    owner.client.mutation(api.identity.revokeMembership, {
+      roleKey: "READ_ONLY",
+    });
+    assert.equal(
+      (
+        await employee.client.query(api.identity.getWorkspace, {
+          agencyId: a.agency.id,
+        })
+      ).membership.roleKey,
+      "READ_ONLY",
+    );
+    await owner.client.mutation(api.identity.revokeMembership, {
       agencyId: a.agency.id,
-      userId: owner.profile.id,
-    }),
-    /LAST_OWNER_PROTECTED/,
-  );
-  await assert.rejects(
-    owner.client.mutation(api.identity.updateMemberRole, {
-      agencyId: a.agency.id,
-      userId: owner.profile.id,
-      roleKey: "EMPLOYEE",
-    }),
-    /LAST_OWNER_PROTECTED/,
-  );
-  await owner.client.mutation(api.identity.updateMemberRole, {
-    agencyId: a.agency.id,
-    userId: employee.profile.id,
-    roleKey: "READ_ONLY",
-  });
-  assert.equal(
-    (
+      userId: employee.profile.id,
+    });
+    assert.equal(
       await employee.client.query(api.identity.getWorkspace, {
         agencyId: a.agency.id,
-      })
-    ).membership.roleKey,
-    "READ_ONLY",
-  );
-  await owner.client.mutation(api.identity.revokeMembership, {
-    agencyId: a.agency.id,
-    userId: employee.profile.id,
-  });
-  assert.equal(
-    await employee.client.query(api.identity.getWorkspace, {
-      agencyId: a.agency.id,
-    }),
-    null,
-  );
-  await assert.rejects(
-    employee.client.mutation(api.identity.acceptInvitation, {
-      token: invite.token,
-    }),
-    /AGENCY_ACCESS_DENIED/,
-  );
-  console.log(
-    "PASS: employee invitation, retry, role restrictions, last-owner protection and revocation.",
-  );
+      }),
+      null,
+    );
+    await assert.rejects(
+      employee.client.mutation(api.identity.acceptInvitation, {
+        token: invite.token,
+      }),
+      /AGENCY_ACCESS_DENIED/,
+    );
+    console.log(
+      "PASS: employee invitation, retry, role restrictions, last-owner protection and revocation.",
+    );
 
-  // Two owners racing to leave must still leave one active owner in a real transaction runtime.
-  const secondInvite = await invitation(
-    owner,
-    a.agency.id,
-    employee.email,
-    "AGENCY_OWNER",
-  );
-  await employee.client.mutation(api.identity.acceptInvitation, {
-    token: secondInvite.token,
-  });
-  const race = await Promise.allSettled([
-    owner.client.mutation(api.identity.revokeMembership, {
-      agencyId: a.agency.id,
-      userId: owner.profile.id,
-    }),
-    employee.client.mutation(api.identity.revokeMembership, {
-      agencyId: a.agency.id,
-      userId: employee.profile.id,
-    }),
-  ]);
-  assert.equal(
-    race.filter((result) => result.status === "fulfilled").length,
-    1,
-  );
-  const remaining = await Promise.all(
-    [owner.client, employee.client].map((client) =>
-      client.query(api.identity.getWorkspace, { agencyId: a.agency.id }),
-    ),
-  );
-  assert.equal(
-    remaining.filter(
-      (workspace) => workspace?.membership.roleKey === "AGENCY_OWNER",
-    ).length,
-    1,
-  );
-  console.log(
-    "PASS: concurrent owner revocation preserves one active owner on the real backend.",
-  );
+    // Two owners racing to leave must still leave one active owner in a real transaction runtime.
+    const secondInvite = await invitation(
+      owner,
+      a.agency.id,
+      employee.email,
+      "AGENCY_OWNER",
+    );
+    await employee.client.mutation(api.identity.acceptInvitation, {
+      token: secondInvite.token,
+    });
+    const race = await Promise.allSettled([
+      owner.client.mutation(api.identity.revokeMembership, {
+        agencyId: a.agency.id,
+        userId: owner.profile.id,
+      }),
+      employee.client.mutation(api.identity.revokeMembership, {
+        agencyId: a.agency.id,
+        userId: employee.profile.id,
+      }),
+    ]);
+    assert.equal(
+      race.filter((result) => result.status === "fulfilled").length,
+      1,
+    );
+    const remaining = await Promise.all(
+      [owner.client, employee.client].map((client) =>
+        client.query(api.identity.getWorkspace, { agencyId: a.agency.id }),
+      ),
+    );
+    assert.equal(
+      remaining.filter(
+        (workspace) => workspace?.membership.roleKey === "AGENCY_OWNER",
+      ).length,
+      1,
+    );
+    console.log(
+      "PASS: concurrent owner revocation preserves one active owner on the real backend.",
+    );
+  }
 
   if (!process.argv.includes("--backend-only")) {
     const { chromium, expect } = await import("@playwright/test");
@@ -465,6 +521,57 @@ try {
       path: `${artifactPath}/employee-mobile.png`,
       fullPage: true,
     });
+    if (
+      process.argv.includes("--with-phase3") ||
+      process.argv.includes("--with-phase4") ||
+      process.argv.includes("--with-phase5")
+    ) {
+      const { smokePhase3 } = await import("./smoke-phase3-flows.mjs");
+      await smokePhase3({
+        page,
+        employeePage,
+        owner: browserOwner,
+        employee: browserEmployee,
+        outsider: other,
+        agencyId: browserAgencyId,
+        base,
+        artifactPath,
+        expect,
+      });
+    }
+    let phase4;
+    if (
+      process.argv.includes("--with-phase4") ||
+      process.argv.includes("--with-phase5")
+    ) {
+      const { smokePhase4 } = await import("./smoke-phase4-flows.mjs");
+      phase4 = await smokePhase4({
+        page,
+        employeePage,
+        owner: browserOwner,
+        employee: browserEmployee,
+        outsider: other,
+        agencyId: browserAgencyId,
+        base,
+        artifactPath,
+        expect,
+      });
+    }
+    if (process.argv.includes("--with-phase5")) {
+      const { smokePhase5 } = await import("./smoke-phase5-flows.mjs");
+      await smokePhase5({
+        page,
+        employeePage,
+        owner: browserOwner,
+        employee: browserEmployee,
+        outsider: other,
+        agencyId: browserAgencyId,
+        vehicleId: phase4.vehicleId,
+        base,
+        artifactPath,
+        expect,
+      });
+    }
     await browserOwner.refresh();
     await browserOwner.client.mutation(api.identity.revokeMembership, {
       agencyId: browserAgencyId,

@@ -13,7 +13,12 @@ export function safeReturnPath(value: string | string[] | undefined) {
     value === "/invitations/accept"
   )
     return value;
-  if (/^\/app\/[a-z0-9]+$/.test(value)) return value;
+  if (
+    /^\/app\/[a-z0-9]+(?:\/settings(?:\/(?:branches|policies))?|\/fleet(?:\/(?:new|catalogs|[a-z0-9]+(?:\/edit)?))?)?$/.test(
+      value,
+    )
+  )
+    return value;
   if (value.startsWith("/invitations/accept?")) {
     return invitationReturnPath(
       new URL(value, "https://app.invalid").searchParams.get("token") ??

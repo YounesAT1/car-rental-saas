@@ -34,7 +34,9 @@ export function IdentitySync({ children }: { children: ReactNode }) {
   const [syncedFor, setSyncedFor] = useState<string | null>(null);
   const [failedFor, setFailedFor] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
-  const identityKey = `${userId}:${sessionId}:${locale}:${retry}`;
+  // Locale synchronization must preserve mounted pages and their unsaved forms.
+  const identityKey = `${userId}:${sessionId}`;
+  const syncKey = `${identityKey}:${locale}:${retry}`;
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !isAuthenticated) return;
@@ -44,7 +46,7 @@ export function IdentitySync({ children }: { children: ReactNode }) {
         if (current) setSyncedFor(identityKey);
       },
       () => {
-        if (current) setFailedFor(identityKey);
+        if (current) setFailedFor(syncKey);
       },
     );
     return () => {
@@ -56,6 +58,7 @@ export function IdentitySync({ children }: { children: ReactNode }) {
     isSignedIn,
     isAuthenticated,
     identityKey,
+    syncKey,
     locale,
   ]);
 
@@ -63,7 +66,7 @@ export function IdentitySync({ children }: { children: ReactNode }) {
   if (isAuthenticated && syncedFor === identityKey && user?.status === "active")
     return children;
 
-  const failed = failedFor === identityKey || user?.status === "disabled";
+  const failed = failedFor === syncKey || user?.status === "disabled";
   if (!failed) {
     return (
       <WorkspaceLoading label={messages.workspace.syncing} variant="page" />
