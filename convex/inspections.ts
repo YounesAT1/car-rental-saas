@@ -102,6 +102,19 @@ export const get = query({
   },
 });
 
+export const amendment = query({
+  args: { agencyId: v.id("agencies"), originalId: v.id("vehicleInspections") },
+  returns: v.union(v.null(), inspectionDoc),
+  handler: async (ctx, args) => {
+    await fleetAccess(ctx, args.agencyId, "inspection.read");
+    await requireInspection(ctx, args.agencyId, args.originalId);
+    const row = await ctx.db
+      .query("vehicleInspections")
+      .withIndex("by_amends", (q) => q.eq("amendsId", args.originalId))
+      .first();
+    return row?.agencyId === args.agencyId ? row : null;
+  },
+});
 export const create = mutation({
   args: {
     agencyId: v.id("agencies"),

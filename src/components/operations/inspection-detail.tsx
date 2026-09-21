@@ -26,6 +26,9 @@ import { localizedLabel } from "@/lib/fleet";
 import { operationsApi } from "@/lib/operations-api";
 import { api } from "../../../convex/_generated/api";
 import { PrivateEvidence } from "./private-evidence";
+import { useConfirm } from "@/components/confirmation-provider";
+import { useUnsavedChanges } from "@/components/settings/form-fields";
+import { useOperationRequestKey } from "@/lib/use-operation-request-key";
 
 type InspectionItem = Doc<"vehicleInspections">["items"][number];
 type InspectionDraft = {
@@ -59,6 +62,27 @@ export function InspectionDetail({
   const [error, setError] = useState<string | null>(null);
   const save = useMutation(operationsApi.inspections.save);
   const complete = useMutation(operationsApi.inspections.complete);
+  const cancel = useMutation(operationsApi.inspections.cancel);
+  const confirm = useConfirm();
+  const saveKey = useOperationRequestKey(JSON.stringify({ id, draft }));
+  const completeKey = useOperationRequestKey(
+    JSON.stringify({
+      id,
+      revision: draft?.revision ?? record?.revision,
+      mileage,
+    }),
+  );
+  const mileageTime = useRef<{ key: string; at: number } | null>(null);
+  const cancelKey = useOperationRequestKey(
+    JSON.stringify({
+      id,
+      revision: draft?.revision ?? record?.revision,
+      notes: draft?.notes ?? record?.notes,
+    }),
+  );
+  useUnsavedChanges(
+    record?.status === "draft" && Boolean((draft && !saved) || mileage),
+  );
 
   if (record === undefined || workspace === undefined)
     return (
@@ -74,7 +98,7 @@ export function InspectionDetail({
     );
   const inspection = record;
   const currentDraft =
-    draft?.revision === inspection.revision
+    inspection.status === "draft" && draft
       ? draft
       : {
           revision: inspection.revision,
@@ -84,22 +108,29 @@ export function InspectionDetail({
           acknowledgment: inspection.acknowledgment,
         };
   const canManage = workspace.permissions.includes("inspection.manage");
+  const stale =
+    inspection.status === "draft" &&
+    currentDraft.revision !== inspection.revision;
+  async function reloadDraft() {
+    if (!(await confirm(m.discardDraft, { actionLabel: m.discardChanges })))
+      return;
+    draftRef.current = null;
+    setDraft(null);
+    setMileage("");
+    setSaved(false);
+    setError(null);
+  }
 
   function updateDraft(update: (source: InspectionDraft) => InspectionDraft) {
-    const source =
-      draftRef.current?.revision === inspection.revision
-        ? draftRef.current
-        : currentDraft;
+    const source = draftRef.current ?? currentDraft;
     const next = update(source);
     draftRef.current = next;
     setDraft(next);
+    setSaved(false);
   }
 
   async function saveInspection() {
-    const formDraft =
-      draftRef.current?.revision === inspection.revision
-        ? draftRef.current
-        : currentDraft;
+    const formDraft = draftRef.current ?? currentDraft;
     const fuel = Number(formDraft.fuelPercent);
     if (!Number.isFinite(fuel) || fuel < 0 || fuel > 100)
       return setError(m.invalid);
@@ -110,7 +141,7 @@ export function InspectionDetail({
       await save({
         agencyId: aid,
         id,
-        expectedRevision: inspection.revision,
+        expectedRevision: formDraft.revision,
         items: formDraft.items.map(({ code, result, notes: itemNotes }) => ({
           code,
           result,
@@ -119,33 +150,32 @@ export function InspectionDetail({
         notes: formDraft.notes,
         fuelPercent: fuel,
         acknowledgment: formDraft.acknowledgment,
-        requestKey: crypto.randomUUID(),
+        requestKey: saveKey,
       });
       const nextDraft = {
         ...formDraft,
-        revision: inspection.revision + 1,
+        revision: formDraft.revision + 1,
       };
       draftRef.current = nextDraft;
       setDraft(nextDraft);
       setSaved(true);
-    } catch {
-      setError(m.failed);
+    } catch (cause) {
+      setError(String(cause).includes("CONFLICT") ? m.conflict : m.failed);
     } finally {
       setPending(false);
     }
   }
 
   async function finish() {
-    const formDraft =
-      draftRef.current?.revision === inspection.revision
-        ? draftRef.current
-        : currentDraft;
+    const formDraft = draftRef.current ?? currentDraft;
     const reading = mileage.trim() ? Number(mileage) : undefined;
     if (reading !== undefined && (!Number.isFinite(reading) || reading < 0))
       return setError(m.invalid);
     setPending(true);
     setError(null);
     try {
+      if (mileageTime.current?.key !== completeKey)
+        mileageTime.current = { key: completeKey, at: Date.now() };
       await complete({
         agencyId: aid,
         id,
@@ -153,11 +183,43 @@ export function InspectionDetail({
         mileage:
           reading === undefined
             ? undefined
-            : { value: reading, unit: "km", observedAt: Date.now() },
-        requestKey: crypto.randomUUID(),
+            : {
+                value: reading,
+                unit: "km",
+                observedAt: mileageTime.current.at,
+              },
+        requestKey: completeKey,
       });
-    } catch {
-      setError(m.failed);
+    } catch (cause) {
+      setError(String(cause).includes("CONFLICT") ? m.conflict : m.failed);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function cancelInspection() {
+    const source = draftRef.current ?? currentDraft;
+    if (!source.notes.trim()) return setError(m.cancellationReasonRequired);
+    if (source.notes.length > 500) return setError(m.invalid);
+    if (
+      !(await confirm(m.cancelInspection, {
+        actionLabel: m.cancelInspection,
+        destructive: true,
+      }))
+    )
+      return;
+    setPending(true);
+    setError(null);
+    try {
+      await cancel({
+        agencyId: aid,
+        id,
+        expectedRevision: source.revision,
+        reason: source.notes,
+        requestKey: cancelKey,
+      });
+    } catch (cause) {
+      setError(String(cause).includes("CONFLICT") ? m.conflict : m.failed);
     } finally {
       setPending(false);
     }
@@ -196,7 +258,7 @@ export function InspectionDetail({
                 )}
               </div>
               <Select
-                disabled={!canManage || record.status !== "draft"}
+                disabled={pending || !canManage || record.status !== "draft"}
                 value={item.result}
                 onValueChange={(result) =>
                   updateDraft((source) => ({
@@ -229,7 +291,7 @@ export function InspectionDetail({
                 </SelectContent>
               </Select>
               <Input
-                disabled={!canManage || record.status !== "draft"}
+                disabled={pending || !canManage || record.status !== "draft"}
                 aria-label={`${localizedLabel(item.labels, locale)}: ${m.findings}`}
                 value={item.notes}
                 onChange={(event) =>
@@ -249,7 +311,7 @@ export function InspectionDetail({
         </div>
         {record.status === "draft" && canManage && (
           <div className="operations-form">
-            <div className="operations-fields">
+            <fieldset disabled={pending} className="operations-fields">
               <Field className="operations-field-wide">
                 <Label htmlFor="inspection-notes">{m.findings}</Label>
                 <Textarea
@@ -301,10 +363,10 @@ export function InspectionDetail({
                 />
                 {m.acknowledgment}
               </Label>
-            </div>
-            {error && (
+            </fieldset>
+            {(error || stale) && (
               <p className="operations-feedback" role="alert">
-                {error}
+                {error ?? m.conflict}
               </p>
             )}
             {saved && (
@@ -313,21 +375,54 @@ export function InspectionDetail({
               </p>
             )}
             <div className="operations-form-actions">
-              <Button disabled={pending} onClick={() => void saveInspection()}>
+              <Button
+                disabled={pending || stale}
+                onClick={() => void saveInspection()}
+              >
                 {m.saveDraft}
               </Button>
               <Button
-                disabled={pending || !saved}
+                disabled={pending || stale || !saved}
                 variant="outline"
                 onClick={() => void finish()}
               >
                 <CheckCircle2 className="size-4" aria-hidden />
                 {m.complete}
               </Button>
+              {stale && (
+                <Button
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => void reloadDraft()}
+                >
+                  {m.reload}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                disabled={pending || stale}
+                onClick={() => void cancelInspection()}
+              >
+                {m.cancelInspection}
+              </Button>
             </div>
           </div>
         )}
       </Card>
+      {record.amendsId && (
+        <Button variant="outline" asChild>
+          <Link href={`/app/${agencyId}/inspections/${record.amendsId}`}>
+            {m.originalInspection}
+          </Link>
+        </Button>
+      )}
+      {record.status === "completed" && (
+        <InspectionAmendment
+          agencyId={aid}
+          originalId={id}
+          canManage={canManage}
+        />
+      )}
       <PrivateEvidence
         agencyId={aid}
         vehicleId={record.vehicleId}
@@ -344,6 +439,123 @@ export function InspectionDetail({
           />
         )}
     </section>
+  );
+}
+
+function InspectionAmendment({
+  agencyId,
+  originalId,
+  canManage,
+}: {
+  agencyId: Id<"agencies">;
+  originalId: Id<"vehicleInspections">;
+  canManage: boolean;
+}) {
+  const {
+    messages: { operations: m },
+  } = useI18n();
+  const amendment = useQuery(api.inspections.amendment, {
+    agencyId,
+    originalId,
+  });
+  const amend = useMutation(api.inspections.amend);
+  const router = useRouter();
+  const confirm = useConfirm();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestKey = useOperationRequestKey(
+    JSON.stringify({ originalId, reason }),
+  );
+  useUnsavedChanges(open && Boolean(reason));
+  async function close() {
+    if (
+      reason &&
+      !(await confirm(m.discardDraft, { actionLabel: m.discardChanges }))
+    )
+      return;
+    setOpen(false);
+    setReason("");
+    setError(null);
+  }
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    try {
+      const next = await amend({ agencyId, originalId, reason, requestKey });
+      setOpen(false);
+      router.push(`/app/${agencyId}/inspections/${next}`);
+    } catch (cause) {
+      setError(
+        String(cause).includes("AMENDMENT_EXISTS")
+          ? m.amendmentExists
+          : m.failed,
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+  return (
+    <Card className="operations-form-card">
+      <h2>{m.amendInspection}</h2>
+      <p>{m.amendmentHint}</p>
+      {amendment ? (
+        <Button variant="outline" asChild>
+          <Link href={`/app/${agencyId}/inspections/${amendment._id}`}>
+            {m.viewAmendment}
+          </Link>
+        </Button>
+      ) : (
+        canManage &&
+        (open ? (
+          <form
+            className="operations-form"
+            onSubmit={(event) => void submit(event)}
+          >
+            <Field>
+              <Label htmlFor="inspection-amendment-reason">{m.reason}</Label>
+              <Textarea
+                autoFocus
+                id="inspection-amendment-reason"
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                maxLength={500}
+                required
+                disabled={pending}
+              />
+            </Field>
+            {error && (
+              <p role="alert" className="operations-feedback">
+                {error}
+              </p>
+            )}
+            <div className="operations-form-actions">
+              <Button disabled={pending || amendment === undefined}>
+                {m.amendInspection}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={pending}
+                onClick={() => void close()}
+              >
+                {m.cancel}
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <Button
+            variant="outline"
+            disabled={amendment === undefined}
+            onClick={() => setOpen(true)}
+          >
+            {m.amendInspection}
+          </Button>
+        ))
+      )}
+    </Card>
   );
 }
 

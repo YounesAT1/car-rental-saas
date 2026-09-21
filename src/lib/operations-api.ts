@@ -99,7 +99,7 @@ export const operationsApi = {
     >("maintenance:cancel"),
     schedules: makeFunctionReference<
       "query",
-      { agencyId: Id<"agencies">; vehicleId: Id<"vehicles"> },
+      { agencyId: Id<"agencies">; vehicleId: Id<"vehicles">; active: boolean },
       Doc<"maintenanceSchedules">[]
     >("maintenance:schedules"),
   },
@@ -288,6 +288,7 @@ export const operationsApi = {
         required: boolean;
         expiryRequired: boolean;
         active: boolean;
+        requestKey: string;
       },
       Id<"vehicleDocumentTypes">
     >("operationCatalogs:saveDocumentType"),
@@ -311,6 +312,7 @@ export const operationsApi = {
           required: boolean;
         }>;
         active: boolean;
+        requestKey: string;
       },
       Id<"inspectionTemplates">
     >("operationCatalogs:saveTemplate"),
@@ -330,6 +332,7 @@ export const operationsApi = {
         email: string;
         address: string;
         active: boolean;
+        requestKey: string;
       },
       Id<"maintenanceVendors">
     >("operationCatalogs:saveVendor"),

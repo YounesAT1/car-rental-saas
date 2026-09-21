@@ -70,11 +70,15 @@ export function localOffsets(local: string, timezone: string) {
     return [];
   }
 }
-export function localDateTimeValue(instant: number, timezone: string) {
+export function localDateTimeValue(
+  instant: number,
+  timezone: string,
+  precision: "minute" | "millisecond" = "minute",
+) {
   return Temporal.Instant.fromEpochMilliseconds(instant)
     .toZonedDateTimeISO(timezone)
     .toPlainDateTime()
-    .toString({ smallestUnit: "minute" });
+    .toString({ smallestUnit: precision });
 }
 export function expiryInstant(date: string, timezone: string) {
   return Temporal.PlainDate.from(validDate(date))

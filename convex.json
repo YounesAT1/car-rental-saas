@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/convex/schemas/convex.schema.json",
   "node": {
-    "externalPackages": ["sharp", "@napi-rs/canvas"],
+    "externalPackages": ["sharp", "@napi-rs/canvas", "pdfjs-dist"],
     "nodeVersion": "24"
   }
 }

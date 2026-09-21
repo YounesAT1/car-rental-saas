@@ -16,6 +16,7 @@ import {
   operationAudit,
   projectedReadiness,
   refreshReadiness,
+  refreshSchedules,
   releaseAllocation,
   requireGuard,
   revision,
@@ -126,6 +127,58 @@ export const allocations = query({
           .eq("agencyId", args.agencyId)
           .eq("vehicleId", args.vehicleId)
           .eq("blocking", true),
+      )
+      .order("desc")
+      .paginate({
+        ...args.paginationOpts,
+        numItems: Math.min(25, args.paginationOpts.numItems),
+      });
+  },
+});
+export const allocationHistory = query({
+  args: {
+    agencyId: v.id("agencies"),
+    vehicleId: v.id("vehicles"),
+    blocking: v.boolean(),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(allocationDoc),
+  handler: async (ctx, args) => {
+    await fleetAccess(ctx, args.agencyId);
+    await ownedVehicle(ctx, args.agencyId, args.vehicleId);
+    return ctx.db
+      .query("vehicleAllocations")
+      .withIndex("by_agency_vehicle_blocking_start", (q) =>
+        q
+          .eq("agencyId", args.agencyId)
+          .eq("vehicleId", args.vehicleId)
+          .eq("blocking", args.blocking),
+      )
+      .order("desc")
+      .paginate({
+        ...args.paginationOpts,
+        numItems: Math.min(25, args.paginationOpts.numItems),
+      });
+  },
+});
+export const issueHistory = query({
+  args: {
+    agencyId: v.id("agencies"),
+    vehicleId: v.id("vehicles"),
+    active: v.boolean(),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(issueDoc),
+  handler: async (ctx, args) => {
+    await fleetAccess(ctx, args.agencyId);
+    await ownedVehicle(ctx, args.agencyId, args.vehicleId);
+    return ctx.db
+      .query("vehicleReadinessIssues")
+      .withIndex("by_agency_vehicle_active", (q) =>
+        q
+          .eq("agencyId", args.agencyId)
+          .eq("vehicleId", args.vehicleId)
+          .eq("active", args.active),
       )
       .order("desc")
       .paginate({
@@ -332,6 +385,12 @@ export const sweep = internalMutation({
       if (!agency) continue;
       try {
         await refreshReadiness(
+          ctx,
+          guard.agencyId,
+          guard.vehicleId,
+          agency.createdByUserId,
+        );
+        await refreshSchedules(
           ctx,
           guard.agencyId,
           guard.vehicleId,

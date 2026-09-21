@@ -41,4 +41,10 @@ crons.interval(
   privateSweep,
   { cursor: null },
 );
+crons.interval(
+  "refresh vehicle readiness and maintenance tasks",
+  { minutes: 5 },
+  internal.operations.sweep,
+  { cursor: null },
+);
 export default crons;

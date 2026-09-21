@@ -6,5 +6,11 @@ export default async function Page({
   params: Promise<{ agencyId: string; inspectionId: string }>;
 }) {
   const { agencyId, inspectionId } = await params;
-  return <InspectionDetail agencyId={agencyId} inspectionId={inspectionId} />;
+  return (
+    <InspectionDetail
+      key={inspectionId}
+      agencyId={agencyId}
+      inspectionId={inspectionId}
+    />
+  );
 }

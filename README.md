@@ -2,7 +2,12 @@
 
 A multi-tenant operating system for independent rental agencies, with a customer storefront, agency workspace, and separate SaaS administration.
 
-**Current status: Phase 5 vehicle operations are implemented locally; the configured development Convex push is pending explicit authorization.** Open **Workspace → Operations** for readiness, maintenance, inspections and tasks, or **Workspace → Manage fleet** for vehicles, categories/features and photos. See the [Phase 5 report](docs/phase-5.md) for scope, validation and the remaining live gate; the Phase 4 report covers fleet evidence.
+**Current status: Phase 5 vehicle operations are complete on the development stack; the full Phase 2–5 live acceptance flow passed on 2026-09-21.** Open **Workspace → Operations** for readiness, maintenance, inspections and tasks, or **Workspace → Manage fleet** for vehicles, categories/features and photos. See the [Phase 5 report](docs/phase-5.md) and [workspace forms report](docs/phase-5-workspace-forms.md) for the delivered scope and validation evidence; the Phase 4 report covers fleet evidence.
+
+Maintenance now links to **Service schedules**, where managers can create, edit,
+archive and restore vehicle schedules. Select the services covered when planning
+maintenance; completing that work establishes their next date/distance thresholds.
+See the [schedule workspace report](docs/phase-5-schedules.md).
 
 The homepage uses a [Mobbin-inspired navbar and text-only hero](docs/homepage-redesign.md): a floating pill navigation, centered typography, responsive layout, coordinated light/dark themes, and English, French, and Arabic translations with RTL support.
 
@@ -56,7 +61,7 @@ pnpm smoke:providers
 
 `check` runs frontend/backend type checks and ESLint with zero warnings allowed. `convex:check` generates types, validates and pushes functions to the selected **development** deployment; it is not a read-only command. `smoke:providers` requires development keys, creates one synthetic Clerk user/session, verifies a signed token and tampered-token rejection, then deletes that user in a `finally` block. It never writes business data. Keep this live smoke check out of production automation. If interrupted during the check, locate only users with the private metadata purpose `phase-1-provider-smoke` for cleanup.
 
-For the production build locally, run `pnpm start` after `pnpm build`. Both frontend modes require access to Clerk. Use `localhost:3000` consistently. In restricted execution environments, Next.js worker spawning may require process permission and service CLIs require network access.
+For the production build locally, run `pnpm start` after `pnpm build`. Both frontend modes require access to Clerk. Use `localhost:3000` consistently. Private-file HTTP actions on the current development deployment allow `http://localhost:3000,http://localhost:3002`. When changing this public allowlist in PowerShell, quote the comma-separated argument, for example `pnpm exec convex env set PRIVATE_FILE_ALLOWED_ORIGINS 'http://localhost:3000,http://localhost:3002'`, and read it back with `pnpm exec convex env get PRIVATE_FILE_ALLOWED_ORIGINS`. In restricted execution environments, Next.js worker spawning may require process permission and service CLIs require network access.
 
 With the app running and the development backend updated, `pnpm smoke:phase5` runs the Phase 2–5 browser/domain flow (or use `pnpm smoke:phase4` for Phase 2–4). Set `PHASE2_BASE_URL` if using a port other than 3000. This creates disposable Clerk identities and agencies, verifies tenant isolation, settings, fleet records, photo processing, mileage, private evidence, maintenance/inspection/task permissions, themes and translations, then performs scoped cleanup. Screenshots and a cleanup manifest live under ignored `.tmp/phase2-<run-id>/`. It refuses production credentials and deployment-key overrides. If interrupted, use the exact manifest for cleanup; do not reset your database.
 
@@ -78,7 +83,7 @@ With the app running and the development backend updated, `pnpm smoke:phase5` ru
 | [Phase 2 report](docs/phase-2.md)                  | Implemented identity, tenancy, RBAC, onboarding and workspace evidence                        |
 | [Phase 3 report](docs/phase-3.md)                  | Agency settings, branches/hours, versioned policies and validation evidence                   |
 | [Phase 4 report](docs/phase-4.md)                  | Fleet, catalogs, validated photo uploads, permissions and validation evidence                 |
-| [Phase 5 report](docs/phase-5.md)                  | Vehicle operations, private evidence, readiness, inspections, damage and task foundations       |
+| [Phase 5 report](docs/phase-5.md)                  | Vehicle operations, private evidence, readiness, inspections, damage and task foundations     |
 | [Roadmap](docs/roadmap.md)                         | Phases 0–19, adjusted dependencies, decisions and Phase 0 completion report                   |
 | [Architecture decisions](docs/decisions/README.md) | Important tradeoffs and proposed ADRs                                                         |
 
@@ -88,4 +93,4 @@ The domain documents describe intended future behavior. The phase reports distin
 
 Each phase begins with inspection, scope, decisions, dependencies, risks, and an implementation plan. Implement that phase only, run its applicable checks, fix defects, update documentation, report results and the next phase, then stop.
 
-The next phase is **Phase 6 — Customers**. Continue only after the Phase 5 development push and live smoke gate are explicitly authorized and complete.
+The next planned phase is **Phase 6 — Customers**. It has not started and requires its own inspection, plan and explicit continuation under the phase protocol.

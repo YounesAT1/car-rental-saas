@@ -17,6 +17,7 @@ import {
 } from "./lib/maintenance";
 import {
   allocate,
+  automaticTask,
   base,
   canReadWorkCost,
   command,
@@ -88,6 +89,50 @@ export const schedules = query({
   },
 });
 
+export const listSchedules = query({
+  args: {
+    agencyId: v.id("agencies"),
+    vehicleId: v.id("vehicles"),
+    active: v.boolean(),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(scheduleDoc),
+  handler: async (ctx, args) => {
+    await fleetAccess(ctx, args.agencyId, "maintenance.read");
+    await ownedVehicle(ctx, args.agencyId, args.vehicleId);
+    return ctx.db
+      .query("maintenanceSchedules")
+      .withIndex("by_agency_vehicle_active", (q) =>
+        q
+          .eq("agencyId", args.agencyId)
+          .eq("vehicleId", args.vehicleId)
+          .eq("active", args.active),
+      )
+      .order("desc")
+      .paginate({
+        ...args.paginationOpts,
+        numItems: Math.min(25, args.paginationOpts.numItems),
+      });
+  },
+});
+
+export const getSchedule = query({
+  args: {
+    agencyId: v.id("agencies"),
+    vehicleId: v.id("vehicles"),
+    id: v.id("maintenanceSchedules"),
+  },
+  returns: v.union(scheduleDoc, v.null()),
+  handler: async (ctx, args) => {
+    await fleetAccess(ctx, args.agencyId, "maintenance.read");
+    await ownedVehicle(ctx, args.agencyId, args.vehicleId);
+    const row = await ctx.db.get(args.id);
+    return row?.agencyId === args.agencyId && row.vehicleId === args.vehicleId
+      ? row
+      : null;
+  },
+});
+
 export const saveSchedule = mutation({
   args: {
     agencyId: v.id("agencies"),
@@ -125,6 +170,22 @@ export const saveSchedule = mutation({
       args,
       async () => {
         if (current) revision(current, args.expectedRevision);
+        if (current?.active && !args.active) {
+          for (const status of ["planned", "in_progress"] as const) {
+            const work = await ctx.db
+              .query("maintenanceRecords")
+              .withIndex("by_agency_vehicle_status", (q) =>
+                q
+                  .eq("agencyId", args.agencyId)
+                  .eq("vehicleId", args.vehicleId)
+                  .eq("status", status),
+              )
+              .take(513);
+            if (work.length > 512) fail("OPERATIONS_LIMIT");
+            if (work.some((record) => record.scheduleIds.includes(current._id)))
+              fail("MAINTENANCE_SCHEDULE_HAS_WORK");
+          }
+        }
         const service = textValue(args.service, 120, true);
         const days =
           args.days === undefined ? undefined : integer(args.days, 1, 3650);
@@ -191,6 +252,16 @@ export const saveSchedule = mutation({
             vehicleId: args.vehicleId,
             ...values,
           });
+        if (!args.active)
+          await automaticTask(
+            ctx,
+            args.agencyId,
+            args.vehicleId,
+            user._id,
+            { kind: "schedule", id: id! },
+            service,
+            false,
+          );
         await refreshSchedules(ctx, args.agencyId, args.vehicleId, user._id);
         await operationAudit(
           ctx,

@@ -39,6 +39,8 @@ import {
   localOffsets,
 } from "@/lib/operations";
 import { WorkspaceLoading } from "@/components/workspace-loading";
+import { MileageHistory } from "./mileage-history";
+import { VehicleAvailability } from "./vehicle-availability";
 
 function formatDate(value: number | undefined, locale: string) {
   return value
@@ -205,20 +207,26 @@ export function VehicleOperations({
           timezone={workspace.agency.timezone}
         />
       )}
-      <HistoryCard
-        title={m.mileage}
-        empty={m.noMileage}
-        rows={mileage.map((row) => ({
-          id: row._id,
-          title: `${new Intl.NumberFormat(locale).format(row.value)} ${row.unit}`,
-          detail: row.reason || row.kind,
-          date: formatDate(row.observedAt, locale),
-        }))}
+      <MileageHistory
+        agencyId={aid}
+        vehicleId={vid}
+        timezone={workspace.agency.timezone}
+        rows={mileage}
+        latestId={summary.guard?.latestMileageId}
+        lifetimeMeters={summary.guard?.mileageMeters}
+        canCorrect={permissions.includes("odometer.correct")}
+        activeVehicle={vehicle.lifecycle === "active"}
         canLoadMore={
           mileageStatus === "CanLoadMore" || mileageStatus === "LoadingMore"
         }
         loadingMore={mileageStatus === "LoadingMore"}
         onLoadMore={() => loadMileage(10)}
+      />
+      <VehicleAvailability
+        agencyId={aid}
+        vehicleId={vid}
+        timezone={workspace.agency.timezone}
+        canManage={permissions.includes("availability.manage")}
       />
 
       {permissions.includes("document.vehicle.read") && (
@@ -232,17 +240,33 @@ export function VehicleOperations({
 
       <div className="operations-history-grid">
         {permissions.includes("maintenance.read") && (
-          <HistoryCard
-            title={m.maintenance}
-            empty={m.empty}
-            rows={maintenance.map((record) => ({
-              id: record._id,
-              title: record.title,
-              detail: record.status.replaceAll("_", " "),
-              date: formatDate(record.completedAt ?? record.recordedAt, locale),
-              href: `/app/${agencyId}/maintenance/${record._id}`,
-            }))}
-          />
+          <div className="operations-stack">
+            <Button
+              variant="outline"
+              className="min-h-11 justify-self-start"
+              asChild
+            >
+              <Link
+                href={`/app/${agencyId}/maintenance/schedules?vehicleId=${vehicleId}`}
+              >
+                {m.schedules}
+              </Link>
+            </Button>
+            <HistoryCard
+              title={m.maintenance}
+              empty={m.empty}
+              rows={maintenance.map((record) => ({
+                id: record._id,
+                title: record.title,
+                detail: record.status.replaceAll("_", " "),
+                date: formatDate(
+                  record.completedAt ?? record.recordedAt,
+                  locale,
+                ),
+                href: `/app/${agencyId}/maintenance/${record._id}`,
+              }))}
+            />
+          </div>
         )}
         {permissions.includes("inspection.read") && (
           <HistoryCard
@@ -463,6 +487,10 @@ function DocumentsCard({
   const [intentId, setIntentId] = useState<Id<"privateUploadIntents"> | null>(
     null,
   );
+  const [draftDocument, setDraftDocument] = useState<{
+    id: Id<"vehicleDocuments">;
+    revision: number;
+  } | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -476,8 +504,10 @@ function DocumentsCard({
     openFileId ? { agencyId, fileId: openFileId } : "skip",
   );
   const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL;
+  const activeDraft = intent?.status === "done" ? null : draftDocument;
   const requestKey = useOperationRequestKey(
     JSON.stringify({
+      draft: activeDraft,
       typeId,
       number,
       issuer,
@@ -489,7 +519,10 @@ function DocumentsCard({
     }),
   );
 
-  async function uploadEvidence(documentId: Id<"vehicleDocuments">) {
+  async function uploadEvidence(
+    documentId: Id<"vehicleDocuments">,
+    expectedRevision: number,
+  ) {
     if (!file) return;
     if (!siteUrl || file.size > 3 * 1024 * 1024)
       throw new Error("PRIVATE_FILE_INVALID");
@@ -497,7 +530,7 @@ function DocumentsCard({
       agencyId,
       vehicleId,
       owner: { kind: "document", id: documentId },
-      expectedRevision: 0,
+      expectedRevision,
     });
     setIntentId(nextIntent);
     const token = await getToken({ template: "convex" });
@@ -525,7 +558,8 @@ function DocumentsCard({
       const documentId = await saveDraft({
         agencyId,
         vehicleId,
-        expectedRevision: 0,
+        id: activeDraft?.id,
+        expectedRevision: activeDraft?.revision ?? 0,
         typeId: typeId as Id<"vehicleDocumentTypes">,
         number,
         issuer,
@@ -533,7 +567,9 @@ function DocumentsCard({
         expiryDate,
         requestKey,
       });
-      await uploadEvidence(documentId);
+      const revision = (activeDraft?.revision ?? 0) + 1;
+      setDraftDocument({ id: documentId, revision });
+      await uploadEvidence(documentId, revision);
       if (!file) {
         setNumber("");
         setIssuer("");

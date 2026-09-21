@@ -15,6 +15,9 @@ import { WorkspaceLoading } from "@/components/workspace-loading";
 import { useI18n } from "@/i18n/client";
 import { operationsApi } from "@/lib/operations-api";
 import { PrivateEvidence } from "./private-evidence";
+import { DamageEditor } from "./damage-editor";
+import { useOperationRequestKey } from "@/lib/use-operation-request-key";
+import { useUnsavedChanges } from "@/components/settings/form-fields";
 
 const nextStatus: Record<
   Doc<"damageReports">["status"],
@@ -44,8 +47,20 @@ export function DamageDetail({
   const record = useQuery(operationsApi.damage.get, { agencyId: aid, id });
   const transition = useMutation(operationsApi.damage.transition);
   const [resolution, setResolution] = useState("");
+  const [resolutionRevision, setResolutionRevision] = useState<number | null>(
+    null,
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestKey = useOperationRequestKey(
+    JSON.stringify({
+      id,
+      revision: resolutionRevision ?? record?.revision,
+      status: record?.status,
+      resolution,
+    }),
+  );
+  useUnsavedChanges(record?.status !== "resolved" && Boolean(resolution));
 
   if (workspace === undefined || record === undefined)
     return (
@@ -81,13 +96,13 @@ export function DamageDetail({
       await transition({
         agencyId: aid,
         id,
-        expectedRevision: damage.revision,
+        expectedRevision: resolutionRevision ?? damage.revision,
         status: next,
         resolution: next === "resolved" ? resolution : "",
-        requestKey: `damage-${id}-${damage.revision}-${next}`,
+        requestKey,
       });
-    } catch {
-      setError(m.failed);
+    } catch (cause) {
+      setError(String(cause).includes("CONFLICT") ? m.conflict : m.failed);
     } finally {
       setPending(false);
     }
@@ -132,6 +147,9 @@ export function DamageDetail({
           </strong>
         )}
       </Card>
+      {canManage && record.status !== "resolved" && (
+        <DamageEditor agencyId={aid} record={record} />
+      )}
       <PrivateEvidence
         agencyId={aid}
         vehicleId={record.vehicleId}
@@ -150,7 +168,11 @@ export function DamageDetail({
               <Textarea
                 id="damage-resolution"
                 value={resolution}
-                onChange={(event) => setResolution(event.target.value)}
+                onChange={(event) => {
+                  setResolutionRevision((value) => value ?? record.revision);
+                  setResolution(event.target.value);
+                }}
+                disabled={pending}
                 maxLength={500}
                 required
               />
@@ -163,7 +185,12 @@ export function DamageDetail({
           )}
           <Button
             className="self-start"
-            disabled={pending || (next === "resolved" && !resolution.trim())}
+            disabled={
+              pending ||
+              (resolutionRevision !== null &&
+                resolutionRevision !== record.revision) ||
+              (next === "resolved" && !resolution.trim())
+            }
             onClick={() => void advance()}
           >
             {statusText(next)}

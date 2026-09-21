@@ -22,6 +22,7 @@ import { useOperationRequestKey } from "@/lib/use-operation-request-key";
 import { localInstant, localOffsets } from "@/lib/operations";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +35,11 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { WorkspaceLoading } from "@/components/workspace-loading";
+import { useConfirm } from "@/components/confirmation-provider";
+import { useUnsavedChanges } from "@/components/settings/form-fields";
+import { CostLines, parseCostDraft, type CostDraft } from "./cost-lines";
+import { OperationTime } from "./operation-time";
+import { TaskEditor } from "./task-editor";
 
 export type OperationsSection =
   "overview" | "maintenance" | "inspections" | "tasks";
@@ -200,6 +206,8 @@ export function OperationsPage({
             <TasksBoard
               agencyId={id}
               timezone={workspace.agency.timezone}
+              canManage={permissions.includes("task.manage")}
+              assignedOnly={workspace.membership.roleKey === "EMPLOYEE"}
               canAssign={
                 permissions.includes("task.manage") &&
                 workspace.membership.roleKey !== "EMPLOYEE"
@@ -299,7 +307,19 @@ function MaintenanceBoard({
   const vehicles = useQuery(operationsApi.catalogs.vehicles, { agencyId });
   const vendors = useQuery(operationsApi.catalogs.vendors, { agencyId });
   const [showForm, setShowForm] = useState(false);
+  const [emergency, setEmergency] = useState(false);
+  const [costLines, setCostLines] = useState<CostDraft[]>([]);
+  const confirm = useConfirm();
   const [vehicleId, setVehicleId] = useState("");
+  const [scheduleIds, setScheduleIds] = useState<Id<"maintenanceSchedules">[]>(
+    [],
+  );
+  const schedules = useQuery(
+    operationsApi.maintenance.schedules,
+    vehicleId
+      ? { agencyId, vehicleId: vehicleId as Id<"vehicles">, active: true }
+      : "skip",
+  );
   const [vendorId, setVendorId] = useState("");
   const [title, setTitle] = useState("");
   const [findings, setFindings] = useState("");
@@ -313,6 +333,41 @@ function MaintenanceBoard({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const save = useMutation(operationsApi.maintenance.save);
+  const reportEmergency = useMutation(api.maintenance.reportEmergency);
+  const dirty = Boolean(
+    vehicleId ||
+    vendorId ||
+    title ||
+    findings ||
+    start ||
+    end ||
+    costLines.length ||
+    scheduleIds.length,
+  );
+  useUnsavedChanges(showForm && dirty && !saved);
+  async function toggleForm() {
+    if (
+      showForm &&
+      dirty &&
+      !(await confirm(m.discardDraft, { actionLabel: m.discardChanges }))
+    )
+      return;
+    setShowForm(!showForm);
+    if (showForm) {
+      setVehicleId("");
+      setVendorId("");
+      setTitle("");
+      setFindings("");
+      setStart("");
+      setEnd("");
+      setStartOffset("");
+      setEndOffset("");
+      setScheduleIds([]);
+      setCostLines([]);
+      setEmergency(false);
+      setError(null);
+    }
+  }
   const requestKey = useOperationRequestKey(
     JSON.stringify({
       vehicleId,
@@ -323,6 +378,9 @@ function MaintenanceBoard({
       end,
       startOffset,
       endOffset,
+      scheduleIds,
+      emergency,
+      costLines,
     }),
   );
   const vehicleLabels = useMemo(
@@ -332,7 +390,11 @@ function MaintenanceBoard({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!vehicleId || !title.trim() || Boolean(start) !== Boolean(end)) {
+    if (
+      !vehicleId ||
+      !title.trim() ||
+      (!emergency && Boolean(start) !== Boolean(end))
+    ) {
       setError(m.invalid);
       return;
     }
@@ -340,24 +402,29 @@ function MaintenanceBoard({
     setSaved(false);
     setError(null);
     try {
-      const recordId = await save({
+      const shared = {
         agencyId,
-        expectedRevision: 0,
         vehicleId: vehicleId as Id<"vehicles">,
         vendorId: vendorId ? (vendorId as Id<"maintenanceVendors">) : undefined,
         title,
         findings,
-        startAt: start
-          ? localInstant(start, timezone, startOffset || undefined)
-          : undefined,
-        endAt: end
-          ? localInstant(end, timezone, endOffset || undefined)
-          : undefined,
-        scheduleIds: [],
-        costLines: [],
+        scheduleIds,
         expectedCurrency: currency,
         requestKey,
-      });
+      };
+      const recordId = emergency
+        ? await reportEmergency(shared)
+        : await save({
+            ...shared,
+            expectedRevision: 0,
+            startAt: start
+              ? localInstant(start, timezone, startOffset || undefined)
+              : undefined,
+            endAt: end
+              ? localInstant(end, timezone, endOffset || undefined)
+              : undefined,
+            costLines: parseCostDraft(costLines, currency),
+          });
       setSaved(true);
       router.push(`/app/${agencyId}/maintenance/${recordId}`);
     } catch (cause) {
@@ -389,10 +456,16 @@ function MaintenanceBoard({
             ),
           )}
         </div>
+        <Button variant="outline" className="rounded-full min-h-11" asChild>
+          <Link href={`/app/${agencyId}/maintenance/schedules`}>
+            {m.schedules}
+          </Link>
+        </Button>
         {canManage && (
           <Button
             className="rounded-full min-h-11"
-            onClick={() => setShowForm(!showForm)}
+            disabled={pending}
+            onClick={() => void toggleForm()}
           >
             <Plus className="size-4" aria-hidden />
             {m.createMaintenance}
@@ -406,140 +479,208 @@ function MaintenanceBoard({
             onSubmit={(event) => void submit(event)}
           >
             <div className="settings-card-heading">
-              <h2>{m.createMaintenance}</h2>
+              <h2>{emergency ? m.emergency : m.createMaintenance}</h2>
               <p>{m.timezoneHint.replace("{timezone}", timezone)}</p>
             </div>
-            <div className="operations-fields">
-              <Field>
-                <Label htmlFor="maintenance-vehicle">{m.vehicle}</Label>
-                <Select
-                  value={vehicleId}
-                  onValueChange={setVehicleId}
-                  dir={locale === "ar" ? "rtl" : "ltr"}
-                >
-                  <SelectTrigger id="maintenance-vehicle" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {vehicles
-                      ?.filter((vehicle) => vehicle.active)
-                      .map((vehicle) => (
-                        <SelectItem key={vehicle.id} value={vehicle.id}>
-                          {vehicle.label}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <Label htmlFor="maintenance-vendor">{m.vendor}</Label>
-                <Select
-                  value={vendorId || "none"}
-                  onValueChange={(value) =>
-                    setVendorId(value === "none" ? "" : value)
-                  }
-                  dir={locale === "ar" ? "rtl" : "ltr"}
-                >
-                  <SelectTrigger id="maintenance-vendor" className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">{m.noVendor}</SelectItem>
-                    {vendors
-                      ?.filter((vendor) => vendor.active)
-                      .map((vendor) => (
-                        <SelectItem key={vendor._id} value={vendor._id}>
-                          {vendor.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field className="operations-field-wide">
-                <Label htmlFor="maintenance-title">{m.titleField}</Label>
-                <Input
-                  id="maintenance-title"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  maxLength={160}
-                  required
+            <fieldset disabled={pending} className="operations-form">
+              <Label className="operations-check">
+                <Checkbox
+                  checked={emergency}
+                  onCheckedChange={(value) => setEmergency(value === true)}
                 />
-              </Field>
-              <Field>
-                <Label htmlFor="maintenance-start">{m.plannedStart}</Label>
-                <Input
-                  id="maintenance-start"
-                  type="datetime-local"
-                  value={start}
-                  onChange={(event) => setStart(event.target.value)}
-                />
-              </Field>
-              {startOffsets.length > 1 && (
+                {m.emergency}
+              </Label>
+              {emergency && (
+                <p className="operations-helper">{m.emergencyHint}</p>
+              )}
+              <div className="operations-fields">
                 <Field>
-                  <Label htmlFor="maintenance-start-offset">{m.offset}</Label>
-                  <Select value={startOffset} onValueChange={setStartOffset}>
-                    <SelectTrigger
-                      id="maintenance-start-offset"
-                      className="w-full"
-                    >
+                  <Label htmlFor="maintenance-vehicle">{m.vehicle}</Label>
+                  <Select
+                    value={vehicleId}
+                    onValueChange={(value) => {
+                      setVehicleId(value);
+                      setScheduleIds([]);
+                    }}
+                    dir={locale === "ar" ? "rtl" : "ltr"}
+                  >
+                    <SelectTrigger id="maintenance-vehicle" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {startOffsets.map((offset) => (
-                        <SelectItem key={offset} value={offset}>
-                          {offset}
-                        </SelectItem>
-                      ))}
+                      {vehicles
+                        ?.filter((vehicle) => vehicle.active)
+                        .map((vehicle) => (
+                          <SelectItem key={vehicle.id} value={vehicle.id}>
+                            {vehicle.label}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </Field>
-              )}
-              <Field>
-                <Label htmlFor="maintenance-end">{m.plannedEnd}</Label>
-                <Input
-                  id="maintenance-end"
-                  type="datetime-local"
-                  value={end}
-                  onChange={(event) => setEnd(event.target.value)}
-                />
-              </Field>
-              {endOffsets.length > 1 && (
                 <Field>
-                  <Label htmlFor="maintenance-end-offset">{m.offset}</Label>
-                  <Select value={endOffset} onValueChange={setEndOffset}>
-                    <SelectTrigger
-                      id="maintenance-end-offset"
-                      className="w-full"
-                    >
+                  <Label htmlFor="maintenance-vendor">{m.vendor}</Label>
+                  <Select
+                    value={vendorId || "none"}
+                    onValueChange={(value) =>
+                      setVendorId(value === "none" ? "" : value)
+                    }
+                    dir={locale === "ar" ? "rtl" : "ltr"}
+                  >
+                    <SelectTrigger id="maintenance-vendor" className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {endOffsets.map((offset) => (
-                        <SelectItem key={offset} value={offset}>
-                          {offset}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="none">{m.noVendor}</SelectItem>
+                      {vendors
+                        ?.filter((vendor) => vendor.active)
+                        .map((vendor) => (
+                          <SelectItem key={vendor._id} value={vendor._id}>
+                            {vendor.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </Field>
-              )}
-              <Field className="operations-field-wide">
-                <Label htmlFor="maintenance-findings">{m.findings}</Label>
-                <Textarea
-                  id="maintenance-findings"
-                  value={findings}
-                  onChange={(event) => setFindings(event.target.value)}
-                  maxLength={4000}
+                <Field className="operations-field-wide">
+                  <Label htmlFor="maintenance-title">{m.titleField}</Label>
+                  <Input
+                    id="maintenance-title"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    maxLength={160}
+                    required
+                  />
+                </Field>
+                {vehicleId && (
+                  <fieldset className="operations-field-wide operations-linked-schedules">
+                    <legend>{m.linkedSchedules}</legend>
+                    <p>{m.linkedSchedulesHint}</p>
+                    {schedules === undefined ? (
+                      <p role="status">{m.loading}</p>
+                    ) : schedules.length === 0 ? (
+                      <p>{m.noActiveSchedules}</p>
+                    ) : (
+                      schedules.map((schedule) => (
+                        <Label className="operations-check" key={schedule._id}>
+                          <Checkbox
+                            checked={scheduleIds.includes(schedule._id)}
+                            onCheckedChange={(checked) =>
+                              setScheduleIds((current) =>
+                                checked === true
+                                  ? [...current, schedule._id]
+                                  : current.filter((id) => id !== schedule._id),
+                              )
+                            }
+                          />
+                          {schedule.service}
+                        </Label>
+                      ))
+                    )}
+                    <Link
+                      href={`/app/${agencyId}/maintenance/schedules?vehicleId=${vehicleId}`}
+                      className="workspace-backlink inline-flex min-h-11 items-center"
+                    >
+                      {m.schedules}
+                    </Link>
+                  </fieldset>
+                )}
+                {!emergency && (
+                  <Field>
+                    <Label htmlFor="maintenance-start">{m.plannedStart}</Label>
+                    <Input
+                      id="maintenance-start"
+                      type="datetime-local"
+                      value={start}
+                      onChange={(event) => setStart(event.target.value)}
+                    />
+                  </Field>
+                )}
+                {!emergency && startOffsets.length > 1 && (
+                  <Field>
+                    <Label htmlFor="maintenance-start-offset">{m.offset}</Label>
+                    <Select value={startOffset} onValueChange={setStartOffset}>
+                      <SelectTrigger
+                        id="maintenance-start-offset"
+                        className="w-full"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {startOffsets.map((offset) => (
+                          <SelectItem key={offset} value={offset}>
+                            {offset}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+                {!emergency && (
+                  <Field>
+                    <Label htmlFor="maintenance-end">{m.plannedEnd}</Label>
+                    <Input
+                      id="maintenance-end"
+                      type="datetime-local"
+                      value={end}
+                      onChange={(event) => setEnd(event.target.value)}
+                    />
+                  </Field>
+                )}
+                {!emergency && endOffsets.length > 1 && (
+                  <Field>
+                    <Label htmlFor="maintenance-end-offset">{m.offset}</Label>
+                    <Select value={endOffset} onValueChange={setEndOffset}>
+                      <SelectTrigger
+                        id="maintenance-end-offset"
+                        className="w-full"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {endOffsets.map((offset) => (
+                          <SelectItem key={offset} value={offset}>
+                            {offset}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                )}
+                <Field className="operations-field-wide">
+                  <Label htmlFor="maintenance-findings">{m.findings}</Label>
+                  <Textarea
+                    id="maintenance-findings"
+                    value={findings}
+                    onChange={(event) => setFindings(event.target.value)}
+                    maxLength={4000}
+                  />
+                </Field>
+              </div>
+              {!emergency && (
+                <CostLines
+                  prefix="maintenance-plan"
+                  value={costLines}
+                  onChange={setCostLines}
+                  currency={currency}
+                  disabled={pending}
                 />
-              </Field>
-            </div>
+              )}
+            </fieldset>
             <OperationFeedback error={error} saved={saved} />
             <div className="operations-form-actions">
-              <Button disabled={pending}>{m.createMaintenance}</Button>
+              <Button
+                disabled={
+                  pending || (Boolean(vehicleId) && schedules === undefined)
+                }
+              >
+                {m.createMaintenance}
+              </Button>
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setShowForm(false)}
+                disabled={pending}
+                onClick={() => void toggleForm()}
               >
                 {m.cancel}
               </Button>
@@ -601,11 +742,45 @@ function InspectionsBoard({
   const [templateId, setTemplateId] = useState("");
   const [type, setType] =
     useState<Doc<"vehicleInspections">["type"]>("routine");
+  const [start, setStart] = useState("");
+  const [end, setEnd] = useState("");
+  const [startOffset, setStartOffset] = useState("");
+  const [endOffset, setEndOffset] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const confirm = useConfirm();
+  useUnsavedChanges(
+    showForm && Boolean(vehicleId || templateId || start || end),
+  );
+  async function toggleForm() {
+    if (
+      showForm &&
+      (vehicleId || templateId || start || end) &&
+      !(await confirm(m.discardDraft, { actionLabel: m.discardChanges }))
+    )
+      return;
+    setShowForm(!showForm);
+    if (showForm) {
+      setStart("");
+      setEnd("");
+      setStartOffset("");
+      setEndOffset("");
+      setVehicleId("");
+      setTemplateId("");
+      setError(null);
+    }
+  }
   const create = useMutation(operationsApi.inspections.create);
   const requestKey = useOperationRequestKey(
-    JSON.stringify({ vehicleId, templateId, type }),
+    JSON.stringify({
+      vehicleId,
+      templateId,
+      type,
+      start,
+      end,
+      startOffset,
+      endOffset,
+    }),
   );
   const vehicleLabels = useMemo(
     () => new Map(vehicles?.map((vehicle) => [vehicle.id, vehicle.label])),
@@ -614,7 +789,8 @@ function InspectionsBoard({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!vehicleId || !templateId) return setError(m.invalid);
+    if (!vehicleId || !templateId || Boolean(start) !== Boolean(end))
+      return setError(m.invalid);
     setPending(true);
     setError(null);
     try {
@@ -623,6 +799,12 @@ function InspectionsBoard({
         vehicleId: vehicleId as Id<"vehicles">,
         templateId: templateId as Id<"inspectionTemplates">,
         type,
+        startAt: start
+          ? localInstant(start, timezone, startOffset || undefined)
+          : undefined,
+        endAt: end
+          ? localInstant(end, timezone, endOffset || undefined)
+          : undefined,
         requestKey,
       });
       router.push(`/app/${agencyId}/inspections/${id}`);
@@ -656,7 +838,8 @@ function InspectionsBoard({
         {canManage && (
           <Button
             className="rounded-full min-h-11"
-            onClick={() => setShowForm(!showForm)}
+            disabled={pending}
+            onClick={() => void toggleForm()}
           >
             <Plus className="size-4" aria-hidden />
             {m.createInspection}
@@ -673,7 +856,7 @@ function InspectionsBoard({
               <h2>{m.createInspection}</h2>
               <p>{m.timezoneHint.replace("{timezone}", timezone)}</p>
             </div>
-            <div className="operations-fields">
+            <fieldset disabled={pending} className="operations-fields">
               <Field>
                 <Label htmlFor="inspection-vehicle">{m.vehicle}</Label>
                 <Select
@@ -731,14 +914,33 @@ function InspectionsBoard({
                   </SelectContent>
                 </Select>
               </Field>
-            </div>
+              <OperationTime
+                prefix="inspection-start"
+                label={m.plannedStart}
+                value={start}
+                onChange={setStart}
+                offset={startOffset}
+                setOffset={setStartOffset}
+                timezone={timezone}
+              />
+              <OperationTime
+                prefix="inspection-end"
+                label={m.plannedEnd}
+                value={end}
+                onChange={setEnd}
+                offset={endOffset}
+                setOffset={setEndOffset}
+                timezone={timezone}
+              />
+            </fieldset>
             <OperationFeedback error={error} saved={false} />
             <div className="operations-form-actions">
               <Button disabled={pending}>{m.createInspection}</Button>
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setShowForm(false)}
+                disabled={pending}
+                onClick={() => void toggleForm()}
               >
                 {m.cancel}
               </Button>
@@ -771,10 +973,14 @@ function TasksBoard({
   agencyId,
   timezone,
   canAssign,
+  canManage,
+  assignedOnly,
 }: {
   agencyId: Id<"agencies">;
   timezone: string;
   canAssign: boolean;
+  canManage: boolean;
+  assignedOnly: boolean;
 }) {
   const {
     locale,
@@ -782,7 +988,7 @@ function TasksBoard({
   } = useI18n();
   const [status, setStatus] =
     useState<Doc<"operationalTasks">["status"]>("open");
-  const [mine, setMine] = useState(!canAssign);
+  const [mine, setMine] = useState(assignedOnly);
   const {
     results,
     loadMore,
@@ -798,7 +1004,9 @@ function TasksBoard({
     canAssign ? { agencyId } : "skip",
   );
   const save = useMutation(api.tasks.save);
+  const [editing, setEditing] = useState<Doc<"operationalTasks"> | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const confirm = useConfirm();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [vehicleId, setVehicleId] = useState("");
@@ -827,6 +1035,30 @@ function TasksBoard({
     }),
   );
 
+  useUnsavedChanges(
+    showForm &&
+      !saved &&
+      Boolean(title || description || vehicleId || assigneeId || due),
+  );
+  async function toggleForm() {
+    if (
+      showForm &&
+      (title || description || vehicleId || assigneeId || due) &&
+      !(await confirm(m.discardDraft, { actionLabel: m.discardChanges }))
+    )
+      return;
+    setShowForm(!showForm);
+    setSaved(false);
+    if (showForm) {
+      setTitle("");
+      setDescription("");
+      setVehicleId("");
+      setAssigneeId("");
+      setDue("");
+      setDueOffset("");
+      setError(null);
+    }
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!title.trim()) return setError(m.invalid);
@@ -851,6 +1083,7 @@ function TasksBoard({
       setTitle("");
       setDescription("");
       setSaved(true);
+      setShowForm(false);
     } catch (cause) {
       setError(operationError(cause, m.failed, m.conflict));
     } finally {
@@ -894,6 +1127,7 @@ function TasksBoard({
                 type="button"
                 variant={status === value ? "secondary" : "ghost"}
                 aria-pressed={status === value}
+                disabled={Boolean(editing) || pending}
                 onClick={() => setStatus(value)}
               >
                 {statusLabel(value, m)}
@@ -902,11 +1136,12 @@ function TasksBoard({
           )}
         </div>
         <div className="operations-actions">
-          {canAssign ? (
+          {!assignedOnly ? (
             <Button
               type="button"
               variant="outline"
               onClick={() => setMine(!mine)}
+              disabled={Boolean(editing) || pending}
               aria-pressed={mine}
             >
               {mine ? m.myTasks : m.agencyQueue}
@@ -917,7 +1152,8 @@ function TasksBoard({
           {canAssign && (
             <Button
               className="rounded-full min-h-11"
-              onClick={() => setShowForm(!showForm)}
+              onClick={() => void toggleForm()}
+              disabled={Boolean(editing) || pending}
             >
               <Plus className="size-4" aria-hidden />
               {m.createTask}
@@ -925,6 +1161,26 @@ function TasksBoard({
           )}
         </div>
       </div>
+      {canManage && editing && (
+        <TaskEditor
+          key={editing._id}
+          agencyId={agencyId}
+          task={editing}
+          current={results.find((row) => row._id === editing._id)}
+          canAssign={canAssign}
+          onClose={() => {
+            const id = editing._id;
+            setEditing(null);
+            requestAnimationFrame(() =>
+              document
+                .querySelector<HTMLElement>(
+                  `[data-operation-id="${id}"] [data-edit-task]`,
+                )
+                ?.focus(),
+            );
+          }}
+        />
+      )}
       {showForm && (
         <Card className="operations-form-card">
           <form
@@ -934,7 +1190,7 @@ function TasksBoard({
             <div className="settings-card-heading">
               <h2>{m.createTask}</h2>
             </div>
-            <div className="operations-fields">
+            <fieldset disabled={pending} className="operations-fields">
               <Field className="operations-field-wide">
                 <Label htmlFor="task-title">{m.titleField}</Label>
                 <Input
@@ -1043,14 +1299,15 @@ function TasksBoard({
                   maxLength={2000}
                 />
               </Field>
-            </div>
+            </fieldset>
             <OperationFeedback error={error} saved={saved} />
             <div className="operations-form-actions">
               <Button disabled={pending}>{m.createTask}</Button>
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => setShowForm(false)}
+                disabled={pending}
+                onClick={() => void toggleForm()}
               >
                 {m.cancel}
               </Button>
@@ -1075,13 +1332,24 @@ function TasksBoard({
               : m[task.priority],
           urgent: task.priority === "urgent",
           action:
-            task.status === "open" || task.status === "in_progress"
+            canManage &&
+            (task.status === "open" || task.status === "in_progress")
               ? {
                   label: task.status === "open" ? m.start : m.complete,
-                  disabled: pending,
+                  disabled: pending || Boolean(editing),
                   run: () => void advance(task),
                 }
               : undefined,
+          extra: canManage && (
+            <Button
+              data-edit-task
+              variant="ghost"
+              disabled={pending || showForm || Boolean(editing)}
+              onClick={() => setEditing(task)}
+            >
+              {m.editCatalog}
+            </Button>
+          ),
         }))}
         canLoadMore={
           pageStatus === "CanLoadMore" || pageStatus === "LoadingMore"
@@ -1112,6 +1380,7 @@ function OperationsQueue({
     href?: string;
     urgent?: boolean;
     action?: { label: string; disabled: boolean; run: () => void };
+    extra?: React.ReactNode;
   }>;
   canLoadMore: boolean;
   loadingMore: boolean;
@@ -1132,7 +1401,11 @@ function OperationsQueue({
     <>
       <div className="operations-queue">
         {rows.map((row) => (
-          <Card className="operations-row" key={row.id}>
+          <Card
+            className="operations-row"
+            key={row.id}
+            data-operation-id={row.id}
+          >
             <span
               className={`operations-status-dot${row.urgent ? " is-urgent" : ""}`}
               aria-hidden
@@ -1163,6 +1436,7 @@ function OperationsQueue({
                 {row.action.label}
               </Button>
             )}
+            {row.extra}
           </Card>
         ))}
       </div>

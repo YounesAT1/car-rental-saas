@@ -363,6 +363,90 @@
     padding-top: 24px;
     border-top: 1px solid var(--border);
   }
+
+  .operations-schedule-card {
+    gap: 20px;
+  }
+  .operations-cost-lines {
+    display: grid;
+    gap: 16px;
+    padding-block: 16px;
+  }
+  .operations-cost-lines legend {
+    font-weight: 600;
+  }
+  .operations-cost-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: end;
+  }
+  .operations-correction-form {
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--muted);
+  }
+  .operations-schedule-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .operations-schedule-heading > div {
+    min-width: 0;
+  }
+  .operations-schedule-heading h2 {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .operations-schedule-heading p,
+  .operations-schedule-hint,
+  .operations-linked-schedules > p {
+    margin-top: 8px;
+    color: var(--muted-foreground);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .operations-schedule-heading .operations-badge {
+    gap: 6px;
+  }
+  .operations-schedule-thresholds {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+    gap: 16px;
+  }
+  .operations-schedule-thresholds > div {
+    padding: 18px;
+    border-radius: 14px;
+    background: var(--muted);
+  }
+  .operations-schedule-thresholds dt {
+    color: var(--muted-foreground);
+    font-size: 13px;
+  }
+  .operations-schedule-thresholds dd {
+    margin-top: 8px;
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .operations-linked-schedules {
+    display: grid;
+    gap: 12px;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+  .operations-linked-schedules legend {
+    padding-inline: 6px;
+    font-weight: 600;
+  }
   .operations-file-list,
   .operations-evidence-upload {
     display: flex;
@@ -443,6 +527,9 @@
     }
   }
   @media (max-width: 720px) {
+    .operations-cost-line {
+      grid-template-columns: 1fr;
+    }
     .operations-toolbar {
       align-items: stretch;
     }
@@ -487,4 +574,32 @@
       grid-column: 2;
     }
   }
+}
+.operations-template-item {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1rem;
+  min-width: 0;
+}
+
+.operations-template-item legend {
+  padding-inline: 0.3rem;
+  font-weight: 600;
+}
+
+.operations-catalog-actions {
+  min-width: 0;
+}
+
+.operations-page [data-slot="button"] {
+  max-width: 100%;
+  white-space: normal;
+  height: auto;
+  min-height: 44px;
+}
+
+.operations-page .settings-section-topline > div {
+  min-width: 0;
 }

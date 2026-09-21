@@ -3,7 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, CheckCircle2, Play, XCircle } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useRef, useState } from "react";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useConfirm } from "@/components/confirmation-provider";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,16 @@ import { operationsApi } from "@/lib/operations-api";
 import { WorkspaceLoading } from "@/components/workspace-loading";
 import { api } from "../../../convex/_generated/api";
 import { PrivateEvidence } from "./private-evidence";
+import { useOperationRequestKey } from "@/lib/use-operation-request-key";
+import { useUnsavedChanges } from "@/components/settings/form-fields";
+import {
+  CostLines,
+  costDraft,
+  parseCostDraft,
+  type CostDraft,
+} from "./cost-lines";
+import { MaintenanceCostCorrection } from "./maintenance-cost-correction";
+import { MaintenancePlanEditor } from "./maintenance-plan-editor";
 
 export function MaintenanceDetail({
   agencyId,
@@ -34,6 +44,12 @@ export function MaintenanceDetail({
   const id = recordId as Id<"maintenanceRecords">;
   const record = useQuery(operationsApi.maintenance.get, { agencyId: aid, id });
   const workspace = useQuery(api.identity.getWorkspace, { agencyId: aid });
+  const vendors = useQuery(
+    operationsApi.catalogs.vendors,
+    workspace?.permissions.includes("maintenance.read")
+      ? { agencyId: aid }
+      : "skip",
+  );
   const start = useMutation(operationsApi.maintenance.start);
   const complete = useMutation(operationsApi.maintenance.complete);
   const cancel = useMutation(operationsApi.maintenance.cancel);
@@ -43,6 +59,38 @@ export function MaintenanceDetail({
   const [readiness, setReadiness] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [costLines, setCostLines] = useState<CostDraft[] | null>(null);
+  const [draftRevision, setDraftRevision] = useState<number | null>(null);
+  const [showCorrection, setShowCorrection] = useState(false);
+  const [showPlanEditor, setShowPlanEditor] = useState(false);
+  const mileageTime = useRef<{ key: string; at: number } | null>(null);
+  const finishKey = useOperationRequestKey(
+    JSON.stringify({
+      id,
+      revision: draftRevision ?? record?.record.revision,
+      findings,
+      mileage,
+      readiness,
+      costLines: costLines ?? record?.record.costLines,
+    }),
+  );
+  const startKey = useOperationRequestKey(
+    JSON.stringify({ id, revision: record?.record.revision, action: "start" }),
+  );
+  const cancelKey = useOperationRequestKey(
+    JSON.stringify({
+      id,
+      revision: draftRevision ?? record?.record.revision,
+      action: "cancel",
+      findings,
+      readiness,
+    }),
+  );
+  useUnsavedChanges(
+    (record?.record.status === "in_progress" ||
+      record?.record.status === "planned") &&
+      draftRevision !== null,
+  );
 
   if (record === undefined || workspace === undefined)
     return (
@@ -57,6 +105,23 @@ export function MaintenanceDetail({
       </section>
     );
   const r = record.record;
+  const canManage = workspace.permissions.includes("maintenance.manage");
+  const costs = costLines ?? costDraft(r.costLines ?? [], r.currency);
+  const stale = draftRevision !== null && draftRevision !== r.revision;
+  function changed() {
+    setDraftRevision((value) => value ?? r.revision);
+    setError(null);
+  }
+  async function reloadDraft() {
+    if (!(await confirm(m.discardDraft, { actionLabel: m.discardChanges })))
+      return;
+    setDraftRevision(null);
+    setCostLines(null);
+    setFindings("");
+    setMileage("");
+    setReadiness(false);
+    setError(null);
+  }
   const formatted = (value: number | undefined) =>
     value
       ? new Intl.DateTimeFormat(locale, {
@@ -73,8 +138,12 @@ export function MaintenanceDetail({
         agencyId: aid,
         id,
         expectedRevision: r.revision,
-        requestKey: crypto.randomUUID(),
+        requestKey: startKey,
       });
+      setDraftRevision(null);
+      setFindings("");
+      setReadiness(false);
+      setError(null);
     } catch {
       setError(m.failed);
     } finally {
@@ -90,28 +159,42 @@ export function MaintenanceDetail({
     setPending(true);
     setError(null);
     try {
+      const parsedCosts = parseCostDraft(costs, r.currency);
+      if (mileageTime.current?.key !== finishKey)
+        mileageTime.current = { key: finishKey, at: Date.now() };
       await complete({
         agencyId: aid,
         id,
-        expectedRevision: r.revision,
+        expectedRevision: draftRevision ?? r.revision,
         findings,
         mileage:
           reading === undefined
             ? undefined
-            : { value: reading, unit: "km", observedAt: Date.now() },
-        costLines: r.costLines ?? [],
+            : {
+                value: reading,
+                unit: "km",
+                observedAt: mileageTime.current.at,
+              },
+        costLines: parsedCosts,
         expectedCurrency: r.currency,
         readinessConfirmed: readiness,
-        requestKey: crypto.randomUUID(),
+        requestKey: finishKey,
       });
-    } catch {
-      setError(m.failed);
+    } catch (cause) {
+      setError(
+        String(cause).includes("CONFLICT")
+          ? m.conflict
+          : String(cause).includes("OPERATIONS_INVALID")
+            ? m.invalid
+            : m.failed,
+      );
     } finally {
       setPending(false);
     }
   }
 
   async function cancelWork() {
+    if (!findings.trim()) return setError(m.invalid);
     const accepted = await confirm(m.cancel, {
       title: m.cancel,
       actionLabel: m.cancel,
@@ -124,10 +207,10 @@ export function MaintenanceDetail({
       await cancel({
         agencyId: aid,
         id,
-        expectedRevision: r.revision,
-        reason: findings || m.cancelled,
+        expectedRevision: draftRevision ?? r.revision,
+        reason: findings,
         readinessConfirmed: readiness,
-        requestKey: crypto.randomUUID(),
+        requestKey: cancelKey,
       });
     } catch {
       setError(m.failed);
@@ -160,6 +243,13 @@ export function MaintenanceDetail({
             {r.findings || "—"}
           </p>
           <dl className="operations-definition-list">
+            <div>
+              <dt>{m.vendor}</dt>
+              <dd>
+                {vendors?.find((vendor) => vendor._id === r.vendorId)?.name ??
+                  m.noVendor}
+              </dd>
+            </div>
             <div>
               <dt>{m.plannedStart}</dt>
               <dd>{formatted(r.startAt)}</dd>
@@ -198,23 +288,87 @@ export function MaintenanceDetail({
           </Card>
         )}
       </div>
-      {r.status === "planned" && (
-        <div className="operations-actions">
-          <Button disabled={pending} onClick={() => void begin()}>
-            <Play className="size-4" aria-hidden />
-            {m.start}
-          </Button>
-          <Button
-            disabled={pending}
-            variant="outline"
-            onClick={() => void cancelWork()}
-          >
-            <XCircle className="size-4" aria-hidden />
-            {m.cancel}
-          </Button>
-        </div>
-      )}
-      {r.status === "in_progress" && (
+      {canManage &&
+        r.status === "planned" &&
+        (showPlanEditor ? (
+          <MaintenancePlanEditor
+            agencyId={aid}
+            record={r}
+            timezone={workspace.agency.timezone}
+            onClose={() => {
+              setShowPlanEditor(false);
+              requestAnimationFrame(() =>
+                document.getElementById("maintenance-edit-open")?.focus(),
+              );
+            }}
+          />
+        ) : (
+          <Card className="operations-form-card">
+            <Field>
+              <Label htmlFor="maintenance-cancel-reason">
+                {m.cancellationReason}
+              </Label>
+              <Textarea
+                id="maintenance-cancel-reason"
+                value={findings}
+                onChange={(event) => {
+                  changed();
+                  setFindings(event.target.value);
+                }}
+                disabled={pending}
+                maxLength={500}
+              />
+            </Field>
+            <Label className="operations-check">
+              <Checkbox
+                checked={readiness}
+                disabled={pending}
+                onCheckedChange={(value) => {
+                  changed();
+                  setReadiness(value === true);
+                }}
+              />
+              {m.ready}
+            </Label>
+            {stale && (
+              <p role="alert" className="operations-feedback">
+                {m.conflict}
+              </p>
+            )}
+            <div className="operations-actions">
+              <Button
+                id="maintenance-edit-open"
+                disabled={pending || draftRevision !== null}
+                variant="outline"
+                onClick={() => setShowPlanEditor(true)}
+              >
+                {m.editCatalog}
+              </Button>
+              <Button disabled={pending || stale} onClick={() => void begin()}>
+                <Play className="size-4" aria-hidden />
+                {m.start}
+              </Button>
+              <Button
+                disabled={pending || stale || !findings.trim()}
+                variant="outline"
+                onClick={() => void cancelWork()}
+              >
+                <XCircle className="size-4" aria-hidden />
+                {m.cancel}
+              </Button>
+              {stale && (
+                <Button
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => void reloadDraft()}
+                >
+                  {m.reload}
+                </Button>
+              )}
+            </div>
+          </Card>
+        ))}
+      {canManage && r.status === "in_progress" && (
         <Card className="operations-form-card">
           <form
             className="operations-form"
@@ -223,48 +377,79 @@ export function MaintenanceDetail({
             <div className="settings-card-heading">
               <h2>{m.complete}</h2>
             </div>
-            <div className="operations-fields">
-              <Field className="operations-field-wide">
-                <Label htmlFor="maintenance-complete-findings">
-                  {m.findings}
+            <fieldset disabled={pending} className="operations-form">
+              <div className="operations-fields">
+                <Field className="operations-field-wide">
+                  <Label htmlFor="maintenance-complete-findings">
+                    {m.findings}
+                  </Label>
+                  <Textarea
+                    id="maintenance-complete-findings"
+                    value={findings}
+                    onChange={(event) => {
+                      changed();
+                      setFindings(event.target.value);
+                    }}
+                    maxLength={4000}
+                    required
+                  />
+                </Field>
+                <Field>
+                  <Label htmlFor="maintenance-mileage">
+                    {m.latestMileage} (km)
+                  </Label>
+                  <Input
+                    id="maintenance-mileage"
+                    inputMode="decimal"
+                    value={mileage}
+                    onChange={(event) => {
+                      changed();
+                      setMileage(event.target.value);
+                    }}
+                  />
+                </Field>
+                <Label className="operations-check">
+                  <Checkbox
+                    checked={readiness}
+                    onCheckedChange={(checked) => {
+                      changed();
+                      setReadiness(checked === true);
+                    }}
+                  />
+                  {m.ready}
                 </Label>
-                <Textarea
-                  id="maintenance-complete-findings"
-                  value={findings}
-                  onChange={(event) => setFindings(event.target.value)}
-                  maxLength={4000}
-                  required
-                />
-              </Field>
-              <Field>
-                <Label htmlFor="maintenance-mileage">
-                  {m.latestMileage} (km)
-                </Label>
-                <Input
-                  id="maintenance-mileage"
-                  inputMode="decimal"
-                  value={mileage}
-                  onChange={(event) => setMileage(event.target.value)}
-                />
-              </Field>
-              <Label className="operations-check">
-                <Checkbox
-                  checked={readiness}
-                  onCheckedChange={(checked) => setReadiness(checked === true)}
-                />
-                {m.ready}
-              </Label>
-            </div>
-            {error && (
+              </div>
+              <CostLines
+                prefix="maintenance-complete"
+                currency={r.currency}
+                value={costs}
+                onChange={(lines) => {
+                  changed();
+                  setCostLines(lines);
+                }}
+                disabled={pending}
+              />
+            </fieldset>
+            {(error || stale) && (
               <p className="operations-feedback" role="alert">
-                {error}
+                {error ?? m.conflict}
               </p>
             )}
             <div className="operations-form-actions">
-              <Button disabled={pending}>
+              <Button disabled={pending || stale}>
                 <CheckCircle2 className="size-4" aria-hidden />
                 {m.complete}
               </Button>
+              {stale && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() => void reloadDraft()}
+                >
+                  {m.reload}
+                </Button>
+              )}
               <Button
                 type="button"
                 disabled={pending}
@@ -277,6 +462,31 @@ export function MaintenanceDetail({
           </form>
         </Card>
       )}
+      {canManage &&
+        r.status === "completed" &&
+        record.expenses &&
+        (showCorrection ? (
+          <MaintenanceCostCorrection
+            agencyId={aid}
+            record={r}
+            expenses={record.expenses}
+            onClose={() => {
+              setShowCorrection(false);
+              requestAnimationFrame(() =>
+                document.getElementById("maintenance-correct-cost")?.focus(),
+              );
+            }}
+          />
+        ) : (
+          <Button
+            id="maintenance-correct-cost"
+            variant="outline"
+            className="min-h-11"
+            onClick={() => setShowCorrection(true)}
+          >
+            {m.correctCost}
+          </Button>
+        ))}
       {error && r.status !== "in_progress" && (
         <p className="operations-feedback" role="alert">
           {error}
